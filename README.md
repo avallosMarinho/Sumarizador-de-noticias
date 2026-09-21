@@ -120,11 +120,3 @@ Esta v0.1 também aceita apenas `.txt`. HTML, URL, RSS, interface gráfica e ban
 de dados ficam para versões futuras.
 
 ## Próxima evolução recomendada
-
-A v0.2 pode acrescentar:
-
-- entrada HTML;
-- limpeza do conteúdo com Trafilatura;
-- validação mais rígida da saída;
-- interface simples;
-- histórico local dos resumos.
