@@ -1,122 +1,169 @@
-# News Summarizer v0.1
+# News Summarizer v0.1.1
 
-Primeira versão funcional de um sumarizador de notícias.
+A v0.1.1 prepara o projeto para comparar diferentes modelos locais do **Ollama**
+e um modelo em nuvem pela **Gemini API**, sem mudar o restante da aplicação.
 
-## O que esta versão faz
+## O que mudou em relação à v0.1
 
-Recebe um arquivo `.txt` contendo uma notícia e gera:
+- Foi criado um contrato comum `SummarizerProvider`.
+- Ollama, Gemini e modo heurístico implementam a mesma interface.
+- Foi criado um esquema único de saída para todos os modelos.
+- Foi criado um prompt-base único para tornar a comparação mais justa.
+- O programa registra `provider`, `modelo`, tempo de execução e tamanho da entrada.
+- Gemini só é utilizado quando escolhido explicitamente; o modo `auto` não envia
+  a notícia para serviços externos.
 
-- `titulo`
-- `resumo`
-- `pontos_principais`
-- `pessoas`
-- `locais`
-- `datas`
-
-O programa possui dois motores:
-
-1. **Ollama**: usa um modelo de linguagem executado localmente.
-2. **Heurístico**: usa somente Python e funciona mesmo sem IA instalada.
-
-O modo padrão é `auto`: primeiro tenta Ollama; se ele não estiver disponível,
-cai automaticamente para o modo heurístico.
-
-## Requisitos mínimos
-
-- Python 3.10 ou superior.
-- Nenhum pacote Python externo é obrigatório.
-
-## Como executar imediatamente
-
-Abra o terminal dentro da pasta do projeto e rode:
-
-```bash
-python3 app.py exemplo_noticia.txt
-```
-
-Como o padrão é `auto`, se você não tiver Ollama instalado o programa continuará
-funcionando em modo heurístico.
-
-Para forçar o modo sem IA:
-
-```bash
-python3 app.py exemplo_noticia.txt --provider heuristic
-```
-
-Para retornar apenas JSON:
-
-```bash
-python3 app.py exemplo_noticia.txt --provider heuristic --json
-```
-
-## Usando IA local com Ollama
-
-O projeto já está preparado para conversar com um Ollama que esteja rodando em:
+## Estrutura
 
 ```text
-http://127.0.0.1:11434
-```
-
-Depois de instalar o Ollama e baixar um modelo compatível, você pode executar:
-
-```bash
-python3 app.py exemplo_noticia.txt --provider ollama --model qwen3:4b
-```
-
-Você também pode informar outro modelo disponível no seu Ollama:
-
-```bash
-python3 app.py exemplo_noticia.txt --provider ollama --model SEU_MODELO
-```
-
-## Estrutura do projeto
-
-```text
-news_summarizer_v0_1/
+news_summarizer_v0_1_1/
 ├── app.py
 ├── exemplo_noticia.txt
 ├── README.md
 ├── summarizer/
 │   ├── __init__.py
+│   ├── contract.py
 │   ├── heuristic.py
-│   ├── ollama_provider.py
 │   ├── reader.py
-│   └── service.py
+│   ├── service.py
+│   └── providers/
+│       ├── __init__.py
+│       ├── base.py
+│       ├── heuristic_provider.py
+│       ├── ollama_provider.py
+│       └── gemini_provider.py
 └── tests/
     └── test_smoke.py
 ```
 
-## Rodando o teste
+## Fluxo arquitetural
+
+```text
+noticia.txt
+    ↓
+reader.py
+    ↓
+service.py
+    ↓
+SummarizerProvider
+    ├── OllamaProvider ─→ Qwen / Llama / Gemma / outro modelo local
+    ├── GeminiProvider ─→ Gemini API
+    └── HeuristicProvider
+    ↓
+mesmo contrato de saída
+    ↓
+JSON / terminal
+```
+
+## Testar sem instalar IA
+
+```bash
+python3 app.py exemplo_noticia.txt --provider heuristic
+```
+
+## Testar modelos locais pelo Ollama
+
+O programa aceita qualquer modelo que já esteja disponível no seu Ollama.
+Exemplos planejados para o experimento:
+
+```bash
+python3 app.py exemplo_noticia.txt --provider ollama --model qwen3.5:4b
+python3 app.py exemplo_noticia.txt --provider ollama --model qwen3:4b-instruct
+python3 app.py exemplo_noticia.txt --provider ollama --model llama3.2:3b
+python3 app.py exemplo_noticia.txt --provider ollama --model gemma3:4b
+```
+
+Eles são executados **um por vez**. O código, a notícia e o formato de saída
+continuam iguais; somente o modelo muda.
+
+Se `--model` for omitido no Ollama, o padrão da v0.1.1 é:
+
+```text
+qwen3.5:4b
+```
+
+## Testar a Gemini API
+
+A aplicação não grava a chave da API em nenhum arquivo. Defina a chave como uma
+variável de ambiente no terminal:
+
+```bash
+export GEMINI_API_KEY="SUA_CHAVE_AQUI"
+```
+
+Depois execute:
+
+```bash
+python3 app.py exemplo_noticia.txt --provider gemini
+```
+
+O modelo Gemini padrão desta versão é:
+
+```text
+gemini-3.7-flash
+```
+
+Também é possível escolher outro modelo explicitamente:
+
+```bash
+python3 app.py exemplo_noticia.txt --provider gemini --model gemini-3.7-flash
+```
+
+A variável definida com `export` dura somente naquela sessão do terminal. Não
+publique a chave em GitHub, artigos, prints ou arquivos do projeto.
+
+## Gerar saída JSON
+
+Funciona da mesma forma para qualquer provider:
+
+```bash
+python3 app.py exemplo_noticia.txt --provider heuristic --json
+python3 app.py exemplo_noticia.txt --provider ollama --model llama3.2:3b --json
+python3 app.py exemplo_noticia.txt --provider gemini --json
+```
+
+Todos devolvem os mesmos campos:
+
+```json
+{
+  "titulo": "...",
+  "resumo": "...",
+  "pontos_principais": ["..."],
+  "pessoas": ["..."],
+  "locais": ["..."],
+  "datas": ["..."],
+  "_meta": {
+    "provider": "...",
+    "model": "...",
+    "duracao_segundos": 0.0,
+    "caracteres_entrada": 0
+  }
+}
+```
+
+O bloco `_meta` é informação experimental; ele não faz parte do conteúdo do
+resumo.
+
+## Por que esta organização é útil para o experimento
+
+O projeto aplica o princípio de **baixo acoplamento**: `app.py` não precisa saber
+como cada IA funciona. Ele pede a um provider que resuma o texto. Cada provider
+faz sua integração específica e devolve o mesmo contrato.
+
+Isso permite comparar modelos mantendo constantes várias condições do teste:
+
+- mesma notícia;
+- mesmo prompt-base;
+- mesmos campos de saída;
+- mesma aplicação;
+- execução individual de cada modelo.
+
+A variável principal passa a ser o modelo/provedor utilizado.
+
+## Testes automatizados
 
 ```bash
 python3 -m unittest discover -s tests -v
 ```
 
-## Arquitetura da v0.1
-
-```text
-arquivo .txt
-    ↓
-leitura e validação
-    ↓
-service.py
-    ↓
-Ollama local ───────────┐
-    │                   │
-    └─ se falhar ─→ modo heurístico
-                        ↓
-                 resultado estruturado
-                        ↓
-                  terminal / JSON
-```
-
-## Limitações conhecidas
-
-O modo heurístico é propositalmente simples. Ele consegue gerar um resumo e
-fazer extrações básicas, mas a identificação de nomes e locais pode conter
-falsos positivos. O modo Ollama tende a produzir resultados bem melhores.
-
-Esta v0.1 também aceita apenas `.txt`. HTML, URL, RSS, interface gráfica e banco
-de dados ficam para versões futuras.
-
-## Próxima evolução recomendada
+Os testes locais não fazem chamadas reais ao Ollama ou à Gemini API.

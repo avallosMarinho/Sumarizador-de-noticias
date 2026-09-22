@@ -5,27 +5,35 @@ import json
 import sys
 from pathlib import Path
 
+from summarizer.providers import DEFAULT_GEMINI_MODEL, DEFAULT_OLLAMA_MODEL
 from summarizer.service import summarize_file
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="News Summarizer v0.1 - resume uma notícia em arquivo .txt"
+        description=(
+            "News Summarizer v0.1.1 - resume uma notícia .txt usando "
+            "Ollama, Gemini ou modo heurístico"
+        )
     )
     parser.add_argument("arquivo", help="Caminho para o arquivo .txt da notícia")
     parser.add_argument(
         "--provider",
-        choices=["auto", "ollama", "heuristic"],
+        choices=["auto", "ollama", "gemini", "heuristic"],
         default="auto",
         help=(
-            "auto: tenta Ollama e usa o modo heurístico se não estiver disponível; "
-            "ollama: exige Ollama local; heuristic: funciona só com Python"
+            "auto: tenta Ollama e usa heurístico se falhar; "
+            "ollama: modelo local; gemini: API Google; "
+            "heuristic: somente Python"
         ),
     )
     parser.add_argument(
         "--model",
-        default="qwen3:4b",
-        help="Modelo do Ollama a utilizar (padrão: qwen3:4b)",
+        default=None,
+        help=(
+            "Modelo a utilizar. Se omitido: "
+            f"Ollama={DEFAULT_OLLAMA_MODEL}; Gemini={DEFAULT_GEMINI_MODEL}."
+        ),
     )
     parser.add_argument(
         "--json",
@@ -52,10 +60,11 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
-    print("\n=== NEWS SUMMARIZER v0.1 ===\n")
+    print("\n=== NEWS SUMMARIZER v0.1.1 ===\n")
     print(f"Título: {result['titulo']}\n")
     print("Resumo:")
     print(result["resumo"])
+
     print("\nPontos principais:")
     for item in result["pontos_principais"]:
         print(f"- {item}")
@@ -69,9 +78,12 @@ def main() -> int:
     print("\nDatas:")
     print(", ".join(result["datas"]) if result["datas"] else "Nenhuma identificada")
 
-    print(f"\nModo usado: {result['_meta']['provider']}")
-    if result["_meta"].get("observacao"):
-        print(f"Observação: {result['_meta']['observacao']}")
+    meta = result["_meta"]
+    print(f"\nProvider: {meta['provider']}")
+    print(f"Modelo: {meta['model']}")
+    print(f"Tempo: {meta['duracao_segundos']} s")
+    if meta.get("observacao"):
+        print(f"Observação: {meta['observacao']}")
 
     return 0
 
