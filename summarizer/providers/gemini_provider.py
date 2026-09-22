@@ -11,7 +11,7 @@ from .base import SummarizerProvider
 from ..contract import SYSTEM_PROMPT, SUMMARY_JSON_SCHEMA, validate_summary
 
 
-DEFAULT_GEMINI_MODEL = "gemini-3.7-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
