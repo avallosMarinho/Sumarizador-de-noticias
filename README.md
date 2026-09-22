@@ -97,16 +97,16 @@ Depois execute:
 python3 app.py exemplo_noticia.txt --provider gemini
 ```
 
-O modelo Gemini padrão desta versão é:
+O modelo Gemini padrão desta versão é (estável/GA em setembro de 2026):
 
 ```text
-gemini-3.7-flash
+gemini-3.8-flash
 ```
 
 Também é possível escolher outro modelo explicitamente:
 
 ```bash
-python3 app.py exemplo_noticia.txt --provider gemini --model gemini-3.7-flash
+python3 app.py exemplo_noticia.txt --provider gemini --model gemini-3.8-flash
 ```
 
 A variável definida com `export` dura somente naquela sessão do terminal. Não
