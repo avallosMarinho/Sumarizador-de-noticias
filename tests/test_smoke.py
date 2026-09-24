@@ -1,8 +1,8 @@
 import os
 import unittest
 
-from summarizer.contract import validate_summary
-from summarizer.providers import HeuristicProvider, OllamaProvider
+from summarizer.contract import SUMMARY_JSON_SCHEMA, validate_summary
+from summarizer.providers import DEFAULT_GEMINI_MODEL, HeuristicProvider, OllamaProvider
 from summarizer.service import build_provider, summarize_text
 
 
@@ -35,6 +35,18 @@ class SmokeTest(unittest.TestCase):
     def test_contract_rejects_missing_fields(self):
         with self.assertRaises(ValueError):
             validate_summary({"titulo": "x"})
+
+    def test_summary_schema_has_required_fields(self):
+        self.assertEqual(SUMMARY_JSON_SCHEMA["type"], "object")
+        self.assertIn("titulo", SUMMARY_JSON_SCHEMA["required"])
+        self.assertIn("resumo", SUMMARY_JSON_SCHEMA["required"])
+        self.assertIn("pontos_principais", SUMMARY_JSON_SCHEMA["required"])
+        self.assertIn("pessoas", SUMMARY_JSON_SCHEMA["required"])
+        self.assertIn("locais", SUMMARY_JSON_SCHEMA["required"])
+        self.assertIn("datas", SUMMARY_JSON_SCHEMA["required"])
+
+    def test_default_gemini_model(self):
+        self.assertEqual(DEFAULT_GEMINI_MODEL, "gemini-3.8-flash")
 
     def test_gemini_requires_key(self):
         old = os.environ.pop("GEMINI_API_KEY", None)

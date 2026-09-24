@@ -43,7 +43,7 @@ class OllamaProvider(SummarizerProvider):
         payload = {
             "model": self.model,
             "stream": False,
-            "format": "json",
+            "format": SUMMARY_JSON_SCHEMA,
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {
@@ -57,7 +57,7 @@ class OllamaProvider(SummarizerProvider):
                     ),
                 },
             ],
-            "options": {"temperature": 0.1},
+            "options": {"temperature": 0},
         }
 
         request = urllib.request.Request(
@@ -70,6 +70,11 @@ class OllamaProvider(SummarizerProvider):
         try:
             with urllib.request.urlopen(request, timeout=240) as response:
                 body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(
+                f"O Ollama retornou HTTP {exc.code}. Detalhes: {details[:500]}"
+            ) from exc
         except urllib.error.URLError as exc:
             raise ConnectionError(
                 "Não foi possível conectar ao Ollama em http://127.0.0.1:11434. "
