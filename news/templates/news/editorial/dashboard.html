@@ -1,0 +1,19 @@
+{% extends 'news/editorial/base.html' %}
+{% load news_tags %}
+{% block editorial_content %}
+<div class="editorial-heading"><div><p class="kicker">Da geração à publicação</p><p class="lead">Revise cada versão antes de compartilhar com os leitores.</p></div><a class="action-button" href="{% url 'admin:news_create' %}">+ Nova notícia</a></div>
+<nav class="queue-tabs" aria-label="Filtrar notícias">
+  <a href="{% url 'admin:index' %}" {% if not state %}aria-current="page"{% endif %}>Todas</a>
+  <a href="?state=pending" {% if state == 'pending' %}aria-current="page"{% endif %}>Pendentes <span>{{ counts.pending }}</span></a>
+  <a href="?state=queued" {% if state == 'queued' %}aria-current="page"{% endif %}>Na fila <span>{{ counts.queued }}</span></a>
+  <a href="?state=processing" {% if state == 'processing' %}aria-current="page"{% endif %}>Gerando <span>{{ counts.processing }}</span></a>
+  <a href="?state=failed" {% if state == 'failed' %}aria-current="page"{% endif %}>Falhas <span>{{ counts.failed }}</span></a>
+  <a href="?state=rejected" {% if state == 'rejected' %}aria-current="page"{% endif %}>Rejeitadas</a>
+  <a href="?state=published" {% if state == 'published' %}aria-current="page"{% endif %}>Publicadas</a>
+</nav>
+<form class="editorial-search" method="get"><input type="hidden" name="state" value="{{ state }}"><label for="q" class="sr-only">Buscar pelo título original</label><input id="q" type="search" name="q" value="{{ query }}" maxlength="150" placeholder="Buscar pelo título original"><button type="submit">Buscar</button>{% if query %}<a href="?state={{ state|urlencode }}">Limpar</a>{% endif %}</form>
+{% if page_obj %}<div class="table-wrap"><table class="editorial-table"><thead><tr><th>Notícia</th><th>Última versão</th><th>Publicação</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody>
+{% for article in page_obj %}<tr><td><a class="article-title" href="{% url 'admin:news_review' article.pk %}">{{ article.original_title }}</a><small>{{ article.source_name|default:'Fonte não informada' }} · {{ article.created_at|date:'d/m/Y H:i' }}</small></td><td><span class="status-badge status-{{ article.latest_status }}">{{ article.latest_status|status_label }}</span><small>Versão {{ article.latest_number|default:'—' }}</small></td><td>{% if article.public_version_id %}<span class="published-label">Publicada · v{{ article.public_version.number }}</span>{% else %}<span class="muted-text">Fora da página pública</span>{% endif %}</td><td><a class="secondary-button" href="{% url 'admin:news_review' article.pk %}">Abrir →</a></td></tr>{% endfor %}
+</tbody></table></div>{% else %}<div class="editorial-empty"><h2>{% if query or state %}Nenhuma notícia neste filtro{% else %}Sua redação começa aqui{% endif %}</h2><p>{% if query or state %}Tente outra busca ou consulte todas as notícias.{% else %}Cadastre uma notícia, gere o resumo e confira o resultado antes de publicar.{% endif %}</p><a href="{% url 'admin:news_create' %}">Cadastrar notícia →</a></div>{% endif %}
+{% if page_obj.has_other_pages %}<nav class="editorial-pagination" aria-label="Paginação">{% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&amp;state={{ state|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Anteriores</a>{% endif %}<span>{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&amp;state={{ state|urlencode }}&amp;page={{ page_obj.next_page_number }}">Próximas →</a>{% endif %}</nav>{% endif %}
+{% endblock %}

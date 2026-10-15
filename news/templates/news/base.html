@@ -1,0 +1,22 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Notícias em versões breves, com revisão humana e acesso à fonte original.">
+  <title>{% block title %}Notícias em resumo{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'news/public.css' %}">
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="{% url 'news:index' %}"><span class="brand-icon" aria-hidden="true">n.</span><span>Notícias <strong>em resumo</strong></span></a>
+      <a class="header-link" href="{% url 'news:index' %}#noticias">Últimas notícias <span aria-hidden="true">↗</span></a>
+    </div>
+  </header>
+  <main id="conteudo">{% block content %}{% endblock %}</main>
+  <footer class="site-footer container"><p>Informação breve. Acesso à notícia completa.</p><a href="{% url 'admin:index' %}">Acesso da equipe <span aria-hidden="true">↗</span></a></footer>
+</body>
+</html>

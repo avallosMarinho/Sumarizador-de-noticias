@@ -1,0 +1,6 @@
+{% extends 'news/editorial/base.html' %}
+{% block trail %} › <a href="{% url 'admin:news_review' article.pk %}">Revisão</a> › Editar{% endblock %}
+{% block editorial_content %}
+<p class="lead">A edição será salva como uma nova versão pendente. O resultado original do modelo e a publicação atual serão preservados.</p>
+<div class="comparison-grid"><section class="editorial-panel"><h2>Notícia original</h2><div class="original-text">{{ article.original_text|linebreaksbr }}</div></section><form method="post" class="editorial-form editorial-panel">{% csrf_token %}{{ form.non_field_errors }}{% include 'news/editorial/fields.html' %}<p class="help">Nos campos de listas, escreva um item por linha.</p><div class="form-actions"><button class="action-button" type="submit">Salvar nova versão para revisão</button><a href="{% url 'admin:news_review' article.pk %}">Cancelar</a></div></form></div>
+{% endblock %}

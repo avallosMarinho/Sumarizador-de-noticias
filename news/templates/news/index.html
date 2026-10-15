@@ -1,0 +1,35 @@
+{% extends 'news/base.html' %}
+{% block content %}
+<section class="hero container">
+  <p class="eyebrow"><span class="dot" aria-hidden="true"></span> Informação essencial</p>
+  <h1>As notícias que importam.<br><span>Em poucas palavras.</span></h1>
+  <p class="hero-copy">Resumos para acompanhar os acontecimentos com clareza.<br>Gerados automaticamente, revisados por uma pessoa.</p>
+</section>
+<section class="news-section container" id="noticias" aria-labelledby="latest-title">
+  <div class="section-top">
+    <div><p class="eyebrow muted">Para sua leitura</p><h2 id="latest-title">Últimas notícias</h2></div>
+    <form method="get" class="search-form" role="search">
+      <label class="visually-hidden" for="search">Buscar notícias</label>
+      <input id="search" type="search" name="q" value="{{ query }}" maxlength="150" placeholder="Buscar uma notícia…">
+      <button type="submit">Buscar</button>
+    </form>
+  </div>
+  {% if query %}<p class="search-result">Resultados para “{{ query }}” <a href="{% url 'news:index' %}#noticias">Limpar busca</a></p>{% endif %}
+  {% if page_obj %}
+  <div class="news-grid">
+    {% for article in page_obj %}
+    <article class="news-card">
+      <div class="card-top"><span class="source">{{ article.source_name|default:'Notícia revisada' }}</span><span class="reviewed"><span aria-hidden="true">✓</span> Revisado</span></div>
+      <p class="card-date">Publicado em {{ article.published_at|date:'d/m/Y' }}</p>
+      <h3><a href="{{ article.get_absolute_url }}">{{ article.public_version.title }}</a></h3>
+      <p class="card-summary">{{ article.public_version.summary|truncatewords:65 }}</p>
+      <div class="card-actions"><a class="read-summary" href="{{ article.get_absolute_url }}">Ver resumo <span aria-hidden="true">→</span></a>{% if article.source_url %}<a class="read-source" href="{{ article.source_url }}" target="_blank" rel="noopener noreferrer">Notícia completa ↗</a>{% endif %}</div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state"><span class="empty-mark" aria-hidden="true">n.</span><h3>{% if query %}Nenhuma notícia encontrada{% else %}Um novo jeito de acompanhar as notícias{% endif %}</h3><p>{% if query %}Experimente outras palavras na busca.{% else %}As notícias aparecerão aqui assim que seus resumos forem revisados e publicados.{% endif %}</p></div>
+  {% endif %}
+  {% if page_obj.has_other_pages %}<nav class="pagination" aria-label="Páginas de notícias">{% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&amp;page={{ page_obj.previous_page_number }}#noticias">← Anteriores</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&amp;page={{ page_obj.next_page_number }}#noticias">Próximas →</a>{% endif %}</nav>{% endif %}
+</section>
+{% endblock %}

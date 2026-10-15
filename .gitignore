@@ -9,3 +9,12 @@ venv/
 .vscode/
 .idea/
 
+# Estado local: banco, chave da aplicação, locks e logs.
+data/
+*.sqlite3
+*.sqlite3-*
+staticfiles/
+.pytest_cache/
+playwright-report/
+test-results/
+

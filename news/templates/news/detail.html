@@ -1,0 +1,14 @@
+{% extends 'news/base.html' %}
+{% block title %}{{ summary.title }} · Notícias em resumo{% endblock %}
+{% block content %}
+<article class="article-page container">
+  <a class="back-link" href="{% url 'news:index' %}#noticias">← Todas as notícias</a>
+  <div class="article-meta"><span class="source">{{ article.source_name|default:'Notícia revisada' }}</span><span class="reviewed">✓ Revisado</span></div>
+  <h1>{{ summary.title }}</h1>
+  <p class="card-date">Resumo publicado em {{ article.published_at|date:'d/m/Y' }}{% if article.source_date %} · Notícia original de {{ article.source_date|date:'d/m/Y' }}{% endif %}</p>
+  <div class="article-summary">{{ summary.summary|linebreaksbr }}</div>
+  {% if summary.points %}<section class="article-points"><h2>O que você precisa saber</h2><ul>{% for point in summary.points %}<li>{{ point }}</li>{% endfor %}</ul></section>{% endif %}
+  {% if summary.people or summary.places or summary.dates %}<dl class="article-facts">{% if summary.people %}<div><dt>Pessoas</dt><dd>{{ summary.people|join:', ' }}</dd></div>{% endif %}{% if summary.places %}<div><dt>Locais</dt><dd>{{ summary.places|join:', ' }}</dd></div>{% endif %}{% if summary.dates %}<div><dt>Datas</dt><dd>{{ summary.dates|join:' · ' }}</dd></div>{% endif %}</dl>{% endif %}
+  <div class="article-bottom"><p>Este resumo foi gerado automaticamente e passou por revisão humana. Consulte a fonte para conhecer todos os detalhes.</p>{% if article.source_url %}<a class="button" href="{{ article.source_url }}" target="_blank" rel="noopener noreferrer">Ler notícia completa ↗</a>{% else %}<p class="source-unavailable">Link para a notícia completa não informado.</p>{% endif %}</div>
+</article>
+{% endblock %}
