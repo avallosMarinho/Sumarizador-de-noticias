@@ -1,1 +1,10 @@
-<datalist id="model-options"><option value="llama3.2:3b"><option value="qwen3.5:4b"><option value="qwen3:4b"><option value="gemma3:4b"></datalist>
+<div class="form-grid" data-model-picker data-models-url="{% url 'admin:news_ollama_models' %}">
+  <div class="field-row">{{ form.provider.label_tag }}{{ form.provider }}{{ form.provider.errors }}</div>
+  <div class="field-row">
+    {{ form.model.label_tag }}{{ form.model }}{{ form.model.errors }}
+    <datalist id="model-options"></datalist>
+    <p class="help" id="model-help" data-model-help>{{ form.model.help_text }}</p>
+    <p class="help" id="model-status" data-model-status role="status" aria-live="polite"></p>
+    <button type="button" class="secondary-button model-refresh" data-model-refresh>Atualizar modelos instalados</button>
+  </div>
+</div>

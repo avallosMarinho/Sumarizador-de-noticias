@@ -25,8 +25,11 @@ class GenerationForm(forms.Form):
     ])
     model = forms.CharField(
         label="Modelo", required=False, max_length=200,
-        help_text="Deixe vazio para usar o padrão do provedor ou informe o nome do modelo instalado.",
-        widget=forms.TextInput(attrs={"placeholder": "Ex.: llama3.2:3b", "list": "model-options"}),
+        help_text="Escolha um modelo instalado no Ollama. Para Gemini, informe o identificador do modelo ou deixe vazio para usar o padrão.",
+        widget=forms.TextInput(attrs={
+            "placeholder": "Escolha um modelo instalado", "list": "model-options",
+            "aria-describedby": "model-help model-status",
+        }),
     )
 
     def clean_model(self):

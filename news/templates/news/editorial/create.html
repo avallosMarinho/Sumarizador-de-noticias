@@ -6,8 +6,7 @@
   <fieldset class="editorial-panel"><legend>1. Notícia original</legend>
   {% for field in form %}{% if field.name != 'provider' and field.name != 'model' %}<div class="field-row">{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}</div>{% endif %}{% endfor %}
   <p class="help">Aceita texto colado ou TXT de até 1 MB e 120 mil caracteres. O link é uma referência; esta versão não busca o conteúdo do site automaticamente.</p></fieldset>
-  <fieldset class="editorial-panel"><legend>2. Geração do resumo</legend><div class="form-grid"><div class="field-row">{{ form.provider.label_tag }}{{ form.provider }}{{ form.provider.errors }}</div><div class="field-row">{{ form.model.label_tag }}{{ form.model }}{{ form.model.errors }}<p class="help">{{ form.model.help_text }}</p></div></div><p class="help">Ollama usa o modelo instalado no notebook. Gemini utiliza a chave configurada no ambiente. O modo heurístico permite testar o fluxo sem IA.</p></fieldset>
-  {% include 'news/editorial/models.html' %}
+  <fieldset class="editorial-panel"><legend>2. Geração do resumo</legend>{% include 'news/editorial/models.html' %}<p class="help">Ollama usa o modelo instalado no notebook. Gemini utiliza a chave configurada no ambiente. O modo heurístico permite testar o fluxo sem IA.</p></fieldset>
   <div class="form-actions"><button class="action-button" type="submit">Salvar notícia e gerar resumo</button><a class="secondary-button" href="{% url 'admin:index' %}">Cancelar</a></div>
 </form>
 {% endblock %}

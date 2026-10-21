@@ -7,13 +7,16 @@ from django.contrib.auth.models import Group, User
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
-from django.http import Http404, HttpResponseNotAllowed
+from django.http import Http404, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
+from summarizer.providers import DEFAULT_OLLAMA_MODEL
+
 from .forms import ArticleForm, DecisionForm, EditSummaryForm, GenerationForm, WithdrawalForm
 from .models import Article, Review, SummaryVersion
+from .ollama import ModelListUnavailable, list_installed_models
 from .services import create_article, decide_version, edit_version, enqueue_generation, require_reviewer, withdraw_article
 
 
@@ -25,6 +28,7 @@ class EditorialSite(admin.AdminSite):
 
     def get_urls(self):
         urls = [
+            path("modelos/ollama/", self.admin_view(self.ollama_models), name="news_ollama_models"),
             path("noticias/nova/", self.admin_view(self.create), name="news_create"),
             path("noticias/<uuid:pk>/", self.admin_view(self.article), name="news_review"),
             path("noticias/<uuid:pk>/gerar/", self.admin_view(self.generate), name="news_generate"),
@@ -33,6 +37,17 @@ class EditorialSite(admin.AdminSite):
             path("resumos/<int:pk>/avaliar/", self.admin_view(self.decide), name="news_decide"),
         ]
         return urls + super().get_urls()
+
+    def ollama_models(self, request):
+        require_reviewer(request.user)
+        if request.method != "GET":
+            return HttpResponseNotAllowed(["GET"])
+        try:
+            models = list_installed_models()
+        except ModelListUnavailable as exc:
+            return JsonResponse({"models": [], "error": str(exc)}, status=503)
+        default = DEFAULT_OLLAMA_MODEL if DEFAULT_OLLAMA_MODEL in models else next(iter(models), "")
+        return JsonResponse({"models": models, "default_model": default})
 
     def page(self, request, template, title, **context):
         require_reviewer(request.user)

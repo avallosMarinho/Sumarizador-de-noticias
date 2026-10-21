@@ -3,3 +3,4 @@
 {% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'news/editorial.css' %}">{% endblock %}
 {% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Painel de revisão</a>{% block trail %}{% endblock %}</div>{% endblock %}
 {% block content %}<div class="editorial">{% block editorial_content %}{% endblock %}</div>{% endblock %}
+{% block extrabody %}{{ block.super }}<script src="{% static 'news/models.js' %}" defer></script>{% endblock %}

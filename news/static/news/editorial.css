@@ -254,6 +254,12 @@ fieldset.editorial-panel {
   color: var(--body-quiet-color);
   margin: 7px 0 0;
 }
+.model-refresh {
+  margin-top: 10px;
+}
+.model-refresh[hidden] {
+  display: none;
+}
 .form-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

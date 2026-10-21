@@ -60,8 +60,15 @@ que o texto já existe.
 ## Usar Ollama ou Gemini na interface
 
 - **Ollama:** mantenha o serviço em execução no notebook. Escolha o provedor no
-  formulário e informe o nome de um modelo já instalado, como `llama3.2:3b`.
-  O padrão herdado do sumarizador é `qwen3.5:4b`.
+  formulário. As sugestões do campo **Modelo** são consultadas no Ollama e mostram
+  somente os nomes instalados, como na saída de `ollama list`. A consulta também
+  está disponível em **Gerar outra versão**. Use **Atualizar modelos instalados**
+  depois de baixar ou remover modelos. Em um campo vazio, a tela preenche o padrão
+  do sumarizador se ele estiver instalado; caso contrário, usa o primeiro nome da
+  lista em ordem alfabética. Uma escolha já preenchida é preservada.
+  Se o serviço estiver indisponível ou não houver modelos, a tela informa a situação;
+  o campo continua permitindo informar o nome manualmente. Não há download automático.
+  No CLI ou em um envio com o campo vazio, o padrão herdado continua `qwen3.5:4b`.
 - **Gemini:** configure `GEMINI_API_KEY` no ambiente do terminal **antes de iniciar
   `runlocal`**. Escolha Gemini no formulário. É possível informar o identificador
   do modelo disponível na sua conta; em branco, utiliza o padrão do código atual.
