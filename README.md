@@ -80,6 +80,29 @@ As chaves não são solicitadas pela interface nem armazenadas no banco. O resul
 da geração vai para revisão; nenhum provedor publica diretamente. A troca da
 interface não altera o tempo de inferência do modelo.
 
+### Tempo de espera do Ollama
+
+A aplicação aguarda até **900 segundos (15 minutos)** de inatividade de socket na
+chamada ao Ollama, em vez do limite anterior de 240 segundos. Como a resposta é
+solicitada sem streaming, o servidor pode concluir o carregamento e a geração
+antes de enviar a resposta. Isso permite aguardar gerações mais lentas no notebook;
+não torna o modelo mais rápido nem garante que ele concluirá dentro desse prazo.
+
+Para alterar o limite, configure um número positivo de segundos **antes** de iniciar
+a aplicação; a variável vale tanto para a interface quanto para o CLI:
+
+```bash
+export OLLAMA_TIMEOUT_SECONDS=1200
+python manage.py runlocal
+```
+
+O exemplo permite esperar 20 minutos. Não é necessário definir a variável para
+usar o padrão de 15 minutos. Se o limite for atingido, o painel registra o nome
+do modelo e o tempo configurado, preserva o original e permite outra tentativa.
+Falha de conexão com um Ollama desligado continua sendo informada separadamente.
+A consulta das sugestões de modelos usa um limite próprio de 2 segundos; um aviso
+em `/admin/modelos/ollama/` não é, por si só, o erro da geração.
+
 ## Revisão, versões e publicação
 
 - **Editar como nova versão:** preserva o resultado original do modelo e cria uma
