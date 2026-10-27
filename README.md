@@ -105,6 +105,18 @@ em `/admin/modelos/ollama/` não é, por si só, o erro da geração.
 
 ## Revisão, versões e publicação
 
+O painel não tem menu lateral. **Nova notícia** inicia o cadastro, e o botão
+**Ver página de notícias** abre a área de leitura. Os filtros incluem **Para
+revisar**, **Em processamento** (fila e geração), **Com falha**, **Publicadas** e
+**Rejeitadas**. A busca pelo título é preservada ao alternar os filtros; os
+contadores dos filtros representam o total de notícias em cada situação.
+
+Cada notícia mostra a situação da última versão separadamente da publicação
+vigente, com ações como **Revisar**, **Acompanhar** e **Ver falha**. Nas telas
+internas, **Voltar ao painel** retorna à listagem. O menu da conta reúne senha e
+saída; para superusuários, também oferece **Gerenciar acesso da equipe** e
+**Consultar registros técnicos**.
+
 - **Editar como nova versão:** preserva o resultado original do modelo e cria uma
   versão pendente, mesmo quando o resumo anterior já está publicado.
 - **Rejeitar com motivo:** registra a decisão e mantém essa versão fora da página pública.

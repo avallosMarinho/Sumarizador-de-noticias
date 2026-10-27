@@ -4,9 +4,9 @@ from urllib.parse import urlencode
 from django.contrib import admin, messages
 from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import OuterRef, Subquery
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import Http404, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.template.response import TemplateResponse
@@ -25,9 +25,11 @@ class EditorialSite(admin.AdminSite):
     site_title = "Redação"
     index_title = "Painel de revisão"
     site_url = "/"
+    enable_nav_sidebar = False
 
     def get_urls(self):
         urls = [
+            path("administracao/<str:section>/", self.admin_view(self.administration), name="news_administration"),
             path("modelos/ollama/", self.admin_view(self.ollama_models), name="news_ollama_models"),
             path("noticias/nova/", self.admin_view(self.create), name="news_create"),
             path("noticias/<uuid:pk>/", self.admin_view(self.article), name="news_review"),
@@ -37,6 +39,19 @@ class EditorialSite(admin.AdminSite):
             path("resumos/<int:pk>/avaliar/", self.admin_view(self.decide), name="news_decide"),
         ]
         return urls + super().get_urls()
+
+    def administration(self, request, section):
+        require_reviewer(request.user)
+        if not request.user.is_superuser:
+            raise PermissionDenied
+        if request.method != "GET":
+            return HttpResponseNotAllowed(["GET"])
+        if section not in {"equipe", "registros"}:
+            raise Http404
+        app_label = "auth" if section == "equipe" else "news"
+        title = "Gerenciar acesso da equipe" if section == "equipe" else "Registros técnicos"
+        return self.page(request, "news/editorial/administration.html", title,
+                         section=section, apps=self.get_app_list(request, app_label))
 
     def ollama_models(self, request):
         require_reviewer(request.user)
@@ -62,7 +77,14 @@ class EditorialSite(admin.AdminSite):
             latest_status=Subquery(latest.values("status")[:1]),
             latest_number=Subquery(latest.values("number")[:1]),
         )
-        counts = {value: base.filter(latest_status=value).count() for value in ["pending", "queued", "processing", "failed"]}
+        counts = base.aggregate(
+            all=Count("pk"),
+            pending=Count("pk", filter=Q(latest_status="pending")),
+            processing=Count("pk", filter=Q(latest_status__in=["queued", "processing"])),
+            failed=Count("pk", filter=Q(latest_status="failed")),
+            rejected=Count("pk", filter=Q(latest_status="rejected")),
+            published=Count("pk", filter=Q(public_version__isnull=False)),
+        )
         query = request.GET.get("q", "").strip()[:150]
         state = request.GET.get("state", "")
         articles = base
@@ -70,11 +92,14 @@ class EditorialSite(admin.AdminSite):
             articles = articles.filter(original_title__icontains=query)
         if state == "published":
             articles = articles.filter(public_version__isnull=False)
+        elif state == "processing":
+            articles = articles.filter(latest_status__in=["queued", "processing"])
         elif state in SummaryVersion.Status.values:
             articles = articles.filter(latest_status=state)
         page = Paginator(articles, 12).get_page(request.GET.get("page"))
         return self.page(request, "news/editorial/dashboard.html", "Painel de revisão",
                          page_obj=page, query=query, state=state, counts=counts,
+                         is_dashboard=True,
                          status_labels=dict(SummaryVersion.Status.choices))
 
     def create(self, request):

@@ -1,0 +1,9 @@
+{% extends 'news/editorial/base.html' %}
+{% block editorial_content %}
+<p class="lead">{% if section == 'equipe' %}Gerencie as contas de quem utiliza a redação. Os grupos permitem reunir permissões quando houver uma equipe maior.{% else %}Consulte os dados internos. Para gerar, editar ou decidir sobre um resumo, abra a notícia no painel de revisão.{% endif %}</p>
+<div class="administration-options">
+{% for app in apps %}{% for model in app.models %}<section class="editorial-panel"><h2>{% if model.object_name == 'User' %}Pessoas com acesso{% elif model.object_name == 'Group' %}Grupos de permissões{% else %}{{ model.name }}{% endif %}</h2>
+{% if model.object_name == 'User' %}<p>Contas, senhas e permissões individuais.</p>{% elif model.object_name == 'Group' %}<p>Configuração avançada para compartilhar permissões entre pessoas.</p>{% endif %}
+<a class="secondary-button" href="{{ model.admin_url }}">Consultar {% if model.object_name == 'User' %}contas{% elif model.object_name == 'Group' %}grupos{% else %}registros{% endif %} →</a></section>{% endfor %}{% endfor %}
+</div>
+{% endblock %}

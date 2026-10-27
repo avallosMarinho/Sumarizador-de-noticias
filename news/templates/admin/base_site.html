@@ -1,0 +1,24 @@
+{% extends 'admin/base.html' %}
+{% load static %}
+{% block title %}{{ title }} | Redação · Notícias em resumo{% endblock %}
+{% block bodyclass %}{{ block.super }} editorial-shell{% endblock %}
+{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'news/editorial.css' %}?v=20261026-panel">{% endblock %}
+{% block header %}
+<header id="header" class="news-header">
+  <a class="news-brand" href="{% url 'admin:index' %}">Notícias em resumo<span>Redação</span></a>
+  {% if has_permission %}<div class="news-header-actions">
+    <a class="news-public-link" href="{% url 'news:index' %}">Ver página de notícias ↗</a>
+    <details class="account-menu"><summary>{% firstof user.get_short_name user.get_username %} <span aria-hidden="true">▾</span></summary>
+      <div class="account-dropdown">
+        <p>Sua conta</p>
+        {% if user.has_usable_password %}<a href="{% url 'admin:password_change' %}">Alterar senha</a>{% endif %}
+        {% if user.is_superuser %}<p>Administração</p>
+        <a href="{% url 'admin:news_administration' 'equipe' %}">Gerenciar acesso da equipe</a>
+        <a href="{% url 'admin:news_administration' 'registros' %}">Consultar registros técnicos</a>{% endif %}
+        <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button type="submit">Sair da conta</button></form>
+      </div>
+    </details>
+  </div>{% endif %}
+</header>
+{% endblock %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">← Voltar ao painel</a>{% if title %}<span> / {{ title }}</span>{% endif %}</div>{% endblock %}

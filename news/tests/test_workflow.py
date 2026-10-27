@@ -281,3 +281,42 @@ class WorkflowTests(TestCase):
             self.assertEqual(self.client.get(reverse("admin:news_review", args=[article.pk])).status_code, 200)
         self.assertEqual(self.client.get(reverse("admin:index")).status_code, 200)
         self.assertEqual(self.client.get(reverse("admin:news_create")).status_code, 200)
+
+    def test_dashboard_combines_queue_and_processing_and_preserves_search(self):
+        queued = self.create(" fila")
+        running = self.create(" gerando")
+        SummaryVersion.objects.filter(article=running).update(status="processing")
+        response = self.client.get(reverse("admin:index"), {"state": "processing"})
+        self.assertEqual({a.pk for a in response.context["page_obj"]}, {queued.pk, running.pk})
+        self.assertEqual(response.context["counts"]["processing"], 2)
+        response = self.client.get(reverse("admin:index"), {"state": "processing", "q": "gerando"})
+        self.assertEqual([a.pk for a in response.context["page_obj"]], [running.pk])
+        self.assertContains(response, 'state=pending&amp;q=gerando')
+
+    def test_dashboard_keeps_publication_visible_with_pending_new_version(self):
+        article, version = self.ready()
+        self.approve(version)
+        enqueue_generation(article, self.reviewer, "heuristic")
+        process_next()
+        response = self.client.get(reverse("admin:index"), {"state": "published"})
+        self.assertEqual([a.pk for a in response.context["page_obj"]], [article.pk])
+        self.assertContains(response, "Versão 1 no ar")
+        self.assertContains(response, "Pronta para revisão")
+        self.assertContains(response, "Revisar")
+        self.assertNotContains(response, 'id="nav-sidebar"')
+        self.assertContains(response, "Ver página de notícias")
+
+    def test_administration_menu_and_pages_require_superuser(self):
+        response = self.client.get(reverse("admin:index"))
+        self.assertNotContains(response, "Gerenciar acesso da equipe")
+        for section in ["equipe", "registros"]:
+            url = reverse("admin:news_administration", args=[section])
+            self.assertEqual(self.client.get(url).status_code, 403)
+        admin_user = get_user_model().objects.create_superuser("admin-teste", password="teste")
+        self.client.force_login(admin_user)
+        self.assertContains(self.client.get(reverse("admin:index")), "Gerenciar acesso da equipe")
+        for section in ["equipe", "registros"]:
+            response = self.client.get(reverse("admin:news_administration", args=[section]))
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, "Voltar ao painel")
+        self.assertContains(self.client.get(reverse("admin:news_administration", args=["equipe"])), reverse("admin:auth_user_changelist"))

@@ -1,6 +1,6 @@
 {% extends 'admin/base_site.html' %}
 {% load static %}
-{% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'news/editorial.css' %}">{% endblock %}
-{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Painel de revisão</a>{% block trail %}{% endblock %}</div>{% endblock %}
+{% block nav-breadcrumbs %}{% if not is_dashboard %}<nav aria-label="Navegação"><div class="breadcrumbs"><a href="{% url 'admin:index' %}">← Voltar ao painel</a>{% block trail %}{% endblock %}</div></nav>{% endif %}{% endblock %}
+{% block content_title %}{% if not is_dashboard %}{{ block.super }}{% endif %}{% endblock %}
 {% block content %}<div class="editorial">{% block editorial_content %}{% endblock %}</div>{% endblock %}
 {% block extrabody %}{{ block.super }}<script src="{% static 'news/models.js' %}" defer></script>{% endblock %}
