@@ -1,6 +1,7 @@
 """Fila persistente, executada por um processo separado da interface."""
 from copy import deepcopy
 import hashlib
+from time import perf_counter
 
 from django.utils import timezone
 
@@ -9,7 +10,7 @@ from summarizer.service import summarize_text
 from .models import SummaryVersion
 
 
-def process_next():
+def process_next(report=None):
     candidate = SummaryVersion.objects.filter(status=SummaryVersion.Status.QUEUED).order_by("created_at").first()
     if candidate is None:
         return False
@@ -18,6 +19,15 @@ def process_next():
     )
     if not claimed:
         return True
+    start = perf_counter()
+
+    def notify(message):
+        if report:
+            report(f"[{timezone.localtime():%H:%M:%S}] Notícia {candidate.article_id} · v{candidate.number} · "
+                   f"{candidate.requested_model}: {message}")
+
+    notify("iniciando geração")
+    result = {}
     try:
         # Nenhuma transação permanece aberta durante a chamada lenta ao modelo.
         result = summarize_text(
@@ -42,8 +52,13 @@ def process_next():
             model=meta.get("model", candidate.requested_model),
             duration_seconds=meta.get("duracao_segundos"), finished_at=timezone.now(), error_message="",
         )
+        notify(f"concluída; pendente de revisão · {meta.get('duracao_segundos', 0)} s")
     except Exception as exc:
+        result = getattr(exc, "generation_result", result)
+        elapsed = round(perf_counter() - start, 3)
         SummaryVersion.objects.filter(pk=candidate.pk, status=SummaryVersion.Status.PROCESSING).update(
             status=SummaryVersion.Status.FAILED, error_message=str(exc)[:2000], finished_at=timezone.now(),
+            duration_seconds=elapsed, generated_output=deepcopy(result),
         )
+        notify(f"falha após {elapsed} s · {str(exc)[:500]}")
     return True

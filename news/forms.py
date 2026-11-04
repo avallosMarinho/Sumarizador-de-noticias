@@ -17,7 +17,7 @@ CRITERIA = {
 
 
 class GenerationForm(forms.Form):
-    provider = forms.ChoiceField(label="Como gerar", initial="ollama", choices=[
+    provider = forms.ChoiceField(label="Como gerar", initial="ollama", required=False, choices=[
         ("ollama", "Ollama · modelo local"),
         ("gemini", "Gemini · API"),
         ("heuristic", "Heurístico · experimentar sem IA"),
@@ -32,6 +32,9 @@ class GenerationForm(forms.Form):
         }),
     )
 
+    def clean_provider(self):
+        return self.cleaned_data.get("provider") or "ollama"
+
     def clean_model(self):
         value = self.cleaned_data["model"].strip()
         if any(char.isspace() for char in value):
@@ -40,7 +43,8 @@ class GenerationForm(forms.Form):
 
 
 class ArticleForm(GenerationForm):
-    original_title = forms.CharField(label="Título original", max_length=300)
+    original_title = forms.CharField(label="Título original (opcional)", max_length=300, required=False,
+        help_text="Se vazio, usamos a primeira linha do texto como identificação inicial.")
     source_name = forms.CharField(label="Fonte", max_length=200, required=False)
     source_url = forms.URLField(label="Link para a notícia completa", max_length=1000, required=False)
     source_date = forms.DateField(
@@ -86,6 +90,8 @@ class ArticleForm(GenerationForm):
         if "\x00" in text:
             raise forms.ValidationError("O arquivo contém caracteres inválidos para um texto de notícia.")
         data["original_text"] = text
+        if not data.get("original_title"):
+            data["original_title"] = text.splitlines()[0].strip()[:300]
         fingerprint = content_fingerprint(text)
         if Article.objects.filter(fingerprint=fingerprint).exists():
             raise forms.ValidationError("Este texto já está cadastrado. Localize a notícia no painel para gerar outra versão.")

@@ -22,8 +22,8 @@ class Command(BaseCommand):
         children = []
         self.stdout.write(f"Página: http://127.0.0.1:{port}/\nRevisão: http://127.0.0.1:{port}/admin/")
         try:
-            children.append(subprocess.Popen([sys.executable, manage, "process_summaries"]))
-            children.append(subprocess.Popen([sys.executable, manage, "runserver", f"127.0.0.1:{port}", "--noreload"]))
+            children.append(subprocess.Popen([sys.executable, "-u", manage, "process_summaries"]))
+            children.append(subprocess.Popen([sys.executable, "-u", manage, "runserver", f"127.0.0.1:{port}", "--noreload"]))
             while all(child.poll() is None for child in children):
                 time.sleep(0.5)
             raise CommandError("Um dos processos foi encerrado. Confira a mensagem acima e inicie novamente.")

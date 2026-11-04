@@ -32,6 +32,50 @@ os dois. Para usar outra porta: `python manage.py runlocal --port 8001`.
 Esta configuração foi preparada para uso local, com acesso pelo próprio notebook.
 A hospedagem pública e o aplicativo mobile são evoluções posteriores.
 
+## Preparar a bateria de testes locais
+
+Em **Nova notícia**, basta colar o texto completo **ou** enviar um `.txt`.
+Título, fonte, link e data são opcionais. Sem título, a primeira linha do texto
+(até 300 caracteres) identifica o cadastro; o título do resumo continua sendo o
+gerado pelo modelo. Permanecem os limites de 1 MB para TXT e 120 mil caracteres,
+a proteção contra duplicatas e a exigência de revisão para publicação.
+
+O provedor padrão é Ollama e o modelo padrão, quando não informado, é
+`qwen3.5:4b`. Para comparar modelos, selecione explicitamente **Ollama** e o nome
+instalado desejado. O modo automático permite fallback heurístico e deve ser
+tratado como outra condição experimental.
+
+Execute `python manage.py runlocal`, solicite a geração no painel e feche o
+navegador se quiser economizar memória. Mantenha o terminal aberto: ele informa
+início, conclusão ou falha, com identificação da notícia, versão, modelo e duração.
+Uma conclusão significa **pendente de revisão**, não publicação automática.
+Reabra o painel para conferir e aprovar o resultado.
+
+Em **Dados da geração para acompanhamento**, cada versão apresenta:
+
+- duração da chamada de sumarização em segundos, excluindo a fila;
+- modelo/provedor solicitado e utilizado e tamanho da entrada em caracteres;
+- tokens de entrada do prompt completo e de saída da resposta estruturada;
+- tempos do Ollama: total, carregamento, processamento da entrada e geração;
+- velocidade de geração: `eval_count * 1e9 / eval_duration`, em tokens/s;
+- prompt de sistema registrado e JSON com os metadados originais.
+
+As métricas do Ollama ficam em `generated_output._meta.ollama`, com durações
+originais em nanossegundos; a tela converte para segundos. Temperatura enviada
+fica em `_meta.parametros_enviados`. Valores ausentes aparecem como **Não disponível**:
+não são estimados nem preenchidos com zero. Versões antigas não recebem métricas
+retroativamente. A duração copiada para uma edição humana é identificada como
+**Tempo da geração de origem**. RAM, CPU e swap continuam sendo monitoradas fora
+da aplicação (`free -h`, `vmstat 1`, `top`).
+
+Falhas também registram duração. Se o Ollama responder, mas o JSON do resumo for
+inválido, as métricas disponíveis e o conteúdo retornado são preservados na
+versão com falha, sem publicação. Erros sem resposta (conexão/timeout) não fornecem
+tokens. No modo automático, a duração inclui a tentativa Ollama malsucedida e o
+fallback; os tokens não são atribuídos ao resultado heurístico.
+
+As mudanças reutilizam o campo JSON existente: não exigem nova migração.
+
 ## Experimentar o fluxo sem instalar um modelo
 
 1. No painel, clique em **Nova notícia**.

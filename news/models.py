@@ -92,6 +92,29 @@ class SummaryVersion(models.Model):
         return f"{self.article} · v{self.number}"
 
     @property
+    def generation_metrics(self):
+        """Presentation only: persisted measurements remain in generated_output."""
+        meta = self.generated_output.get("_meta", {})
+        ollama = meta.get("ollama", {})
+        rows = [("Caracteres da entrada", meta.get("caracteres_entrada"))]
+        for key, label in (
+            ("prompt_eval_count", "Tokens de entrada (prompt completo)"),
+            ("prompt_eval_cached_count", "Tokens de entrada em cache"),
+            ("eval_count", "Tokens de saída"),
+            ("tokens_por_segundo", "Velocidade de geração (tokens/s)"),
+        ):
+            rows.append((label, ollama.get(key)))
+        for key, label in (
+            ("total_duration", "Tempo total informado pelo Ollama (s)"),
+            ("load_duration", "Carregamento do modelo (s)"),
+            ("prompt_eval_duration", "Processamento da entrada (s)"),
+            ("eval_duration", "Geração dos tokens (s)"),
+        ):
+            value = ollama.get(key)
+            rows.append((label, round(value / 1e9, 6) if value is not None else None))
+        return rows
+
+    @property
     def ready(self):
         return self.status in {self.Status.PENDING, self.Status.APPROVED, self.Status.REJECTED}
 

@@ -111,4 +111,25 @@ class OllamaProvider(SummarizerProvider):
             ) from exc
 
         content = body.get("message", {}).get("content", "")
-        return validate_summary(_extract_json(content))
+        # Preserve measured values as supplied by Ollama (durations in ns).
+        metrics = {}
+        for key in ("total_duration", "load_duration", "prompt_eval_count",
+                    "prompt_eval_cached_count", "prompt_eval_duration", "eval_count", "eval_duration"):
+            value = body.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                metrics[key] = value
+        for key in ("model", "created_at", "done_reason"):
+            if isinstance(body.get(key), str):
+                metrics[key] = body[key]
+        if metrics.get("eval_duration", 0) > 0 and "eval_count" in metrics:
+            metrics["tokens_por_segundo"] = round(metrics["eval_count"] * 1e9 / metrics["eval_duration"], 3)
+        # Absent fields stay absent; no token estimates or invented zero values.
+        metadata = {"ollama": metrics, "parametros_enviados": payload["options"]}
+        try:
+            result = validate_summary(_extract_json(content))
+        except (ValueError, TypeError) as exc:
+            # A malformed summary still consumed model time and tokens.
+            exc.generation_result = {"_meta": metadata, "_resposta_ollama": content}
+            raise
+        result["_meta"] = metadata
+        return result

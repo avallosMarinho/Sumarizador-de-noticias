@@ -29,12 +29,23 @@ def build_provider(provider: str, model: str | None = None) -> SummarizerProvide
 
 def _run_provider(text: str, engine: SummarizerProvider) -> dict:
     start = perf_counter()
-    result = engine.summarize(text)
+    try:
+        result = engine.summarize(text)
+    except Exception as exc:
+        result = getattr(exc, "generation_result", {})
+        result.setdefault("_meta", {}).update({
+            "provider": engine.name, "model": engine.model,
+            "duracao_segundos": round(perf_counter() - start, 3),
+            "caracteres_entrada": len(text),
+        })
+        exc.generation_result = result
+        raise
     elapsed = perf_counter() - start
 
     result["_meta"] = {
+        **result.get("_meta", {}),
         "provider": engine.name,
-        "model": engine.model,
+        "model": result.get("_meta", {}).get("ollama", {}).get("model", engine.model),
         "duracao_segundos": round(elapsed, 3),
         "caracteres_entrada": len(text),
     }
@@ -54,10 +65,13 @@ def summarize_text(
     # O modo auto permanece totalmente local: tenta Ollama e, se ele não estiver
     # disponível, usa o mecanismo heurístico. Gemini só é chamado explicitamente,
     # evitando envio involuntário da notícia para um serviço externo.
+    start = perf_counter()
     try:
         return _run_provider(text, OllamaProvider(model=model))
     except Exception as exc:
         result = _run_provider(text, HeuristicProvider())
+        result["_meta"]["duracao_segundos"] = round(perf_counter() - start, 3)
+        result["_meta"]["fallback"] = True
         result["_meta"]["observacao"] = (
             "O Ollama não pôde ser usado; foi aplicado o fallback heurístico. "
             f"Motivo: {exc}"
