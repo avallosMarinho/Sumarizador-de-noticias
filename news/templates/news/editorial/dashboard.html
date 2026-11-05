@@ -1,7 +1,7 @@
 {% extends 'news/editorial/base.html' %}
 {% load news_tags %}
 {% block editorial_content %}
-<div class="editorial-heading"><div><h1>Painel de revisão</h1><p class="lead">Acompanhe as notícias e revise os resumos antes de publicar.</p></div><a class="action-button" href="{% url 'admin:news_create' %}">+ Nova notícia</a></div>
+<div class="editorial-heading"><div><h1>Painel de revisão</h1><p class="lead">Acompanhe as notícias e revise os resumos antes de publicar.</p></div><div class="form-actions"><a class="secondary-button" href="{% url 'admin:news_experiment_round' %}">Nova rodada</a><a class="action-button" href="{% url 'admin:news_create' %}">+ Nova notícia</a></div></div>
 <nav class="queue-tabs" aria-label="Filtrar notícias">
   <a href="?q={{ query|urlencode }}" {% if not state %}aria-current="page"{% endif %}>Todas <span>{{ counts.all }}</span></a>
   <a href="?state=pending&amp;q={{ query|urlencode }}" {% if state == 'pending' %}aria-current="page"{% endif %}>Para revisar <span>{{ counts.pending }}</span></a>
