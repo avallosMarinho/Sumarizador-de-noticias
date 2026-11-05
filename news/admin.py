@@ -18,7 +18,10 @@ from summarizer.providers import DEFAULT_OLLAMA_MODEL
 from .forms import ArticleForm, DecisionForm, EditSummaryForm, GenerationForm, WithdrawalForm
 from .models import Article, Review, SummaryVersion
 from .ollama import ModelListUnavailable, list_installed_models
-from .services import create_article, decide_version, edit_version, enqueue_generation, require_reviewer, withdraw_article
+from .services import (
+    create_article, decide_version, edit_version, enqueue_generation,
+    move_article_to_trash, require_reviewer, restore_article, withdraw_article,
+)
 
 
 class EditorialSite(admin.AdminSite):
@@ -36,6 +39,8 @@ class EditorialSite(admin.AdminSite):
             path("noticias/<uuid:pk>/", self.admin_view(self.article), name="news_review"),
             path("noticias/<uuid:pk>/gerar/", self.admin_view(self.generate), name="news_generate"),
             path("noticias/<uuid:pk>/retirar/", self.admin_view(self.withdraw), name="news_withdraw"),
+            path("noticias/<uuid:pk>/lixeira/", self.admin_view(self.trash), name="news_trash"),
+            path("noticias/<uuid:pk>/restaurar/", self.admin_view(self.restore), name="news_restore"),
             path("resumos/<int:pk>/editar/", self.admin_view(self.edit), name="news_edit"),
             path("resumos/<int:pk>/avaliar/", self.admin_view(self.decide), name="news_decide"),
         ]
@@ -74,10 +79,12 @@ class EditorialSite(admin.AdminSite):
     def index(self, request, extra_context=None):
         require_reviewer(request.user)
         latest = SummaryVersion.objects.filter(article_id=OuterRef("pk")).order_by("-number")
-        base = Article.objects.select_related("public_version").annotate(
+        articles_with_status = Article.objects.select_related("public_version").annotate(
             latest_status=Subquery(latest.values("status")[:1]),
             latest_number=Subquery(latest.values("number")[:1]),
         )
+        base = articles_with_status.filter(trashed_at__isnull=True)
+        trashed = articles_with_status.filter(trashed_at__isnull=False)
         counts = base.aggregate(
             all=Count("pk"),
             pending=Count("pk", filter=Q(latest_status="pending")),
@@ -86,9 +93,10 @@ class EditorialSite(admin.AdminSite):
             rejected=Count("pk", filter=Q(latest_status="rejected")),
             published=Count("pk", filter=Q(public_version__isnull=False)),
         )
+        counts["trash"] = trashed.count()
         query = request.GET.get("q", "").strip()[:150]
         state = request.GET.get("state", "")
-        articles = base
+        articles = trashed.order_by("-trashed_at", "-pk") if state == "trash" else base
         if query:
             articles = articles.filter(original_title__icontains=query)
         if state == "published":
@@ -98,8 +106,9 @@ class EditorialSite(admin.AdminSite):
         elif state in SummaryVersion.Status.values:
             articles = articles.filter(latest_status=state)
         page = Paginator(articles, 12).get_page(request.GET.get("page"))
+        dashboard_query = urlencode({"q": query, "state": state, "page": page.number})
         return self.page(request, "news/editorial/dashboard.html", "Painel de revisão",
-                         page_obj=page, query=query, state=state, counts=counts,
+                         page_obj=page, query=query, state=state, counts=counts, dashboard_query=dashboard_query,
                          is_dashboard=True,
                          status_labels=dict(SummaryVersion.Status.choices))
 
@@ -152,7 +161,7 @@ class EditorialSite(admin.AdminSite):
         require_reviewer(request.user)
         if request.method != "GET":
             return HttpResponseNotAllowed(["GET"])
-        article = get_object_or_404(Article.objects.select_related("public_version"), pk=pk)
+        article = get_object_or_404(Article.objects.select_related("public_version"), pk=pk, trashed_at__isnull=True)
         version = None
         if request.GET.get("versao"):
             if not request.GET["versao"].isdigit():
@@ -165,7 +174,7 @@ class EditorialSite(admin.AdminSite):
         require_reviewer(request.user)
         if request.method != "POST":
             return HttpResponseNotAllowed(["POST"])
-        article = get_object_or_404(Article, pk=pk)
+        article = get_object_or_404(Article, pk=pk, trashed_at__isnull=True)
         form = GenerationForm(request.POST)
         if form.is_valid():
             try:
@@ -182,7 +191,7 @@ class EditorialSite(admin.AdminSite):
         require_reviewer(request.user)
         if request.method != "POST":
             return HttpResponseNotAllowed(["POST"])
-        version = get_object_or_404(SummaryVersion.objects.select_related("article"), pk=pk)
+        version = get_object_or_404(SummaryVersion.objects.select_related("article"), pk=pk, article__trashed_at__isnull=True)
         form = DecisionForm(request.POST)
         if form.is_valid():
             try:
@@ -201,7 +210,7 @@ class EditorialSite(admin.AdminSite):
         require_reviewer(request.user)
         if request.method not in {"GET", "POST"}:
             return HttpResponseNotAllowed(["GET", "POST"])
-        source = get_object_or_404(SummaryVersion.objects.select_related("article"), pk=pk)
+        source = get_object_or_404(SummaryVersion.objects.select_related("article"), pk=pk, article__trashed_at__isnull=True)
         if not source.ready:
             messages.error(request, "Aguarde a geração antes de editar.")
             return redirect("admin:news_review", source.article_id)
@@ -220,7 +229,7 @@ class EditorialSite(admin.AdminSite):
         require_reviewer(request.user)
         if request.method != "POST":
             return HttpResponseNotAllowed(["POST"])
-        article = get_object_or_404(Article.objects.select_related("public_version"), pk=pk)
+        article = get_object_or_404(Article.objects.select_related("public_version"), pk=pk, trashed_at__isnull=True)
         form = WithdrawalForm(request.POST, prefix="withdrawal")
         if form.is_valid():
             try:
@@ -234,6 +243,39 @@ class EditorialSite(admin.AdminSite):
                 return redirect("admin:news_review", article.pk)
         return self.page(request, "news/editorial/review.html", article.original_title,
                          **self.review_context(article, withdrawal_form=form))
+
+    def trash(self, request, pk):
+        require_reviewer(request.user)
+        if request.method not in {"GET", "POST"}:
+            return HttpResponseNotAllowed(["GET", "POST"])
+        article = get_object_or_404(Article, pk=pk, trashed_at__isnull=True)
+        filters = {key: request.GET[key] for key in ("q", "state", "page") if key in request.GET}
+        return_url = reverse("admin:index")
+        if filters:
+            return_url += "?" + urlencode(filters)
+        if request.method == "POST":
+            try:
+                move_article_to_trash(article, request.user)
+            except ValidationError as exc:
+                messages.error(request, " ".join(exc.messages))
+            else:
+                messages.success(request, "Notícia movida para a lixeira.")
+                return redirect(return_url)
+        return self.page(request, "news/editorial/trash.html", "Mover notícia para a lixeira",
+                         article=article, return_url=return_url)
+
+    def restore(self, request, pk):
+        require_reviewer(request.user)
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+        article = get_object_or_404(Article, pk=pk, trashed_at__isnull=False)
+        try:
+            restore_article(article, request.user)
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        else:
+            messages.success(request, "Notícia restaurada.")
+        return redirect(reverse("admin:index") + "?state=trash")
 
 
 editorial_site = EditorialSite(name="admin")

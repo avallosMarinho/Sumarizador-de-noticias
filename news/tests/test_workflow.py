@@ -320,3 +320,98 @@ class WorkflowTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, "Voltar ao painel")
         self.assertContains(self.client.get(reverse("admin:news_administration", args=["equipe"])), reverse("admin:auth_user_changelist"))
+
+    def test_trash_confirmation_moves_only_the_selected_news_and_can_restore_it(self):
+        article, version = self.ready(" para descartar")
+        other, _ = self.ready(" para manter")
+        endpoint = reverse("admin:news_trash", args=[article.pk])
+        dashboard_url = reverse("admin:index") + "?q=Biblioteca&state=pending&page=1"
+        confirmation = self.client.get(endpoint, {"q": "Biblioteca", "state": "pending", "page": 1})
+        self.assertContains(confirmation, "Mover esta notícia para a lixeira?")
+        self.assertContains(confirmation, article.original_title)
+        self.assertContains(confirmation, "Cancelar")
+        self.assertEqual(confirmation.context["return_url"], dashboard_url)
+        article.refresh_from_db()
+        self.assertIsNone(article.trashed_at)
+
+        response = self.client.post(endpoint + "?q=Biblioteca&state=pending&page=1")
+        self.assertRedirects(response, dashboard_url)
+        listing = self.client.get(reverse("admin:index"))
+        self.assertEqual([item.pk for item in listing.context["page_obj"]], [other.pk])
+        self.assertEqual(listing.context["counts"]["all"], 1)
+        self.assertEqual(listing.context["counts"]["pending"], 1)
+        self.assertEqual(listing.context["counts"]["trash"], 1)
+        trash = self.client.get(reverse("admin:index"), {"state": "trash"})
+        self.assertEqual([item.pk for item in trash.context["page_obj"]], [article.pk])
+        self.assertContains(trash, "Restaurar")
+        self.assertEqual(article.versions.get().generated_output, version.generated_output)
+
+        restore = reverse("admin:news_restore", args=[article.pk])
+        self.assertEqual(self.client.get(restore).status_code, 405)
+        self.assertRedirects(self.client.post(restore), reverse("admin:index") + "?state=trash")
+        article.refresh_from_db()
+        self.assertIsNone(article.trashed_at)
+        self.assertEqual(article.versions.get().pk, version.pk)
+        self.assertEqual(enqueue_generation(article, self.reviewer, "heuristic").number, 2)
+
+    def test_trash_hides_a_publication_until_explicitly_restored(self):
+        article, version = self.ready()
+        self.approve(version)
+        public = Client()
+        self.assertContains(public.get(article.get_absolute_url()), version.summary)
+        self.client.post(reverse("admin:news_trash", args=[article.pk]))
+        self.assertNotContains(public.get("/"), version.title)
+        self.assertEqual(public.get(article.get_absolute_url()).status_code, 404)
+        trash = self.client.get(reverse("admin:index"), {"state": "trash"})
+        self.assertContains(trash, "Restaurar e republicar")
+        self.assertEqual(Review.objects.filter(version=version).count(), 1)
+
+        self.client.post(reverse("admin:news_restore", args=[article.pk]))
+        self.assertContains(public.get(article.get_absolute_url()), version.summary)
+        article.refresh_from_db()
+        self.assertEqual(article.public_version_id, version.pk)
+
+    def test_trash_and_restore_require_editorial_permission_and_csrf(self):
+        article, _ = self.ready()
+        endpoint = reverse("admin:news_trash", args=[article.pk])
+        restore = reverse("admin:news_restore", args=[article.pk])
+        denied = Client()
+        denied.force_login(self.staff)
+        self.assertEqual(denied.get(endpoint).status_code, 403)
+        self.assertEqual(denied.post(endpoint).status_code, 403)
+        protected = Client(enforce_csrf_checks=True)
+        protected.force_login(self.reviewer)
+        self.assertEqual(protected.post(endpoint).status_code, 403)
+
+        self.client.post(endpoint)
+        self.assertEqual(denied.post(restore).status_code, 403)
+        self.assertEqual(protected.post(restore).status_code, 403)
+        article.refresh_from_db()
+        self.assertIsNotNone(article.trashed_at)
+
+    def test_trash_preserves_queued_and_processing_versions(self):
+        article = self.create()
+        endpoint = reverse("admin:news_trash", args=[article.pk])
+        for status in (SummaryVersion.Status.QUEUED, SummaryVersion.Status.PROCESSING):
+            with self.subTest(status=status):
+                article.versions.update(status=status)
+                self.assertContains(self.client.post(endpoint), "Aguarde a geração na fila ou em andamento")
+                article.refresh_from_db()
+                self.assertIsNone(article.trashed_at)
+                self.assertEqual(article.versions.get().status, status)
+
+    def test_trashed_news_rejects_new_versions_and_points_to_restore(self):
+        article, version = self.ready()
+        self.client.post(reverse("admin:news_trash", args=[article.pk]))
+        self.assertEqual(self.client.get(reverse("admin:news_review", args=[article.pk])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("admin:news_generate", args=[article.pk]), {
+            "provider": "heuristic",
+        }).status_code, 404)
+        with self.assertRaises(ValidationError):
+            enqueue_generation(article, self.reviewer, "heuristic")
+        with self.assertRaises(ValidationError):
+            decide_version(version, self.reviewer, Review.Action.APPROVE, criteria=CRITERIA)
+        form = ArticleForm({"original_text": article.original_text})
+        self.assertFalse(form.is_valid())
+        self.assertIn("Esta notícia está na lixeira", str(form.non_field_errors()))
+        self.assertEqual(article.versions.count(), 1)
