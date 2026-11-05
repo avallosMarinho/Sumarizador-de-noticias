@@ -26,8 +26,6 @@ document.querySelectorAll('[data-model-picker]').forEach((picker) => {
         option.value = name;
         options.append(option);
       }
-      // Usa somente um padrão que esteja instalado, sem trocar uma escolha já preenchida.
-      if (!model.value && data.default_model) model.value = data.default_model;
       status.textContent = data.models.length
         ? `${data.models.length} modelo(s) instalado(s). Atualize a lista após baixar ou remover um modelo.`
         : 'Nenhum modelo instalado no Ollama. Baixe um modelo e atualize a lista.';

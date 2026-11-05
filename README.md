@@ -34,11 +34,16 @@ A hospedagem pública e o aplicativo mobile são evoluções posteriores.
 
 ## Preparar a bateria de testes locais
 
-Em **Nova notícia**, basta colar o texto completo **ou** enviar um `.txt`.
-Título, fonte, link e data são opcionais. Sem título, a primeira linha do texto
-(até 300 caracteres) identifica o cadastro; o título do resumo continua sendo o
-gerado pelo modelo. Permanecem os limites de 1 MB para TXT e 120 mil caracteres,
-a proteção contra duplicatas e a exigência de revisão para publicação.
+Em **Nova notícia**, cole uma notícia ou selecione até 20 arquivos `.txt` no
+mesmo envio, um por notícia. Cada arquivo pode ter até 1 MB e 120 mil caracteres.
+O lote usa o mesmo provedor e modelo, com uma entrada na fila por notícia. Um
+arquivo inválido ou duplicado impede o envio do lote e o formulário indica o
+arquivo com problema.
+
+Título, fonte, link e data são opcionais para uma notícia. No envio em lote,
+deixe esses campos em branco. Sem título, a primeira linha do texto (até 300
+caracteres) identifica o cadastro. O título do resumo é gerado pelo modelo e a
+publicação exige revisão.
 
 O provedor padrão é Ollama e o modelo padrão, quando não informado, é
 `qwen3.5:4b`. Para comparar modelos, selecione explicitamente **Ollama** e o nome
@@ -107,9 +112,9 @@ que o texto já existe.
   formulário. As sugestões do campo **Modelo** são consultadas no Ollama e mostram
   somente os nomes instalados, como na saída de `ollama list`. A consulta também
   está disponível em **Gerar outra versão**. Use **Atualizar modelos instalados**
-  depois de baixar ou remover modelos. Em um campo vazio, a tela preenche o padrão
-  do sumarizador se ele estiver instalado; caso contrário, usa o primeiro nome da
-  lista em ordem alfabética. Uma escolha já preenchida é preservada.
+  depois de baixar ou remover modelos. **Nova notícia** começa com o último modelo
+  local solicitado pela sua conta. Se for seu primeiro uso, o campo começa vazio
+  e a lista oferece os modelos instalados.
   Se o serviço estiver indisponível ou não houver modelos, a tela informa a situação;
   o campo continua permitindo informar o nome manualmente. Não há download automático.
   No CLI ou em um envio com o campo vazio, o padrão herdado continua `qwen3.5:4b`.

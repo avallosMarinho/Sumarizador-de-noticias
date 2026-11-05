@@ -7,6 +7,8 @@ from .models import Article, Review
 from .services import content_fingerprint, normalize_url
 
 MAX_TEXT_LENGTH = 120_000
+MAX_TXT_BYTES = 1024 * 1024
+MAX_TXT_FILES = 20
 CRITERIA = {
     "fidelity": "Fidelidade: fatos, nomes, datas e números conferem com o original.",
     "coverage": "Cobertura: as informações essenciais foram preservadas.",
@@ -42,7 +44,38 @@ class GenerationForm(forms.Form):
         return value
 
 
+class MultipleTxtInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class TxtFilesField(forms.FileField):
+    def clean(self, data, initial=None):
+        files = data if isinstance(data, (list, tuple)) else [data] if data else []
+        if len(files) > MAX_TXT_FILES:
+            raise forms.ValidationError(f"Envie até {MAX_TXT_FILES} arquivos por vez.")
+        cleaned = []
+        for upload in files:
+            try:
+                file = super().clean(upload, initial)
+                if Path(file.name).suffix.lower() != ".txt" or file.size > MAX_TXT_BYTES:
+                    raise forms.ValidationError("Envie um arquivo .txt de até 1 MB.")
+            except forms.ValidationError as exc:
+                raise forms.ValidationError(f"{upload.name}: {exc.messages[0]}") from exc
+            cleaned.append(file)
+        return cleaned
+
+
+def read_uploaded_text(file):
+    raw = file.read(MAX_TXT_BYTES + 1)
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return raw.decode(encoding).strip()
+        except UnicodeDecodeError:
+            continue
+
+
 class ArticleForm(GenerationForm):
+    max_txt_files = MAX_TXT_FILES
     original_title = forms.CharField(label="Título original (opcional)", max_length=300, required=False,
         help_text="Se vazio, usamos a primeira linha do texto como identificação inicial.")
     source_name = forms.CharField(label="Fonte", max_length=200, required=False)
@@ -55,7 +88,10 @@ class ArticleForm(GenerationForm):
         label="Texto da notícia", required=False, max_length=MAX_TEXT_LENGTH,
         widget=forms.Textarea(attrs={"rows": 12, "placeholder": "Cole a notícia completa aqui…"}),
     )
-    text_file = forms.FileField(label="Ou importe um arquivo TXT", required=False)
+    text_file = TxtFilesField(
+        label="Ou envie um ou mais arquivos TXT", required=False,
+        widget=MultipleTxtInput(attrs={"accept": ".txt"}),
+    )
 
     def clean_source_url(self):
         url = self.cleaned_data.get("source_url", "")
@@ -63,40 +99,46 @@ class ArticleForm(GenerationForm):
             raise forms.ValidationError("Use um link HTTP ou HTTPS para a notícia.")
         return normalize_url(url)
 
-    def clean_text_file(self):
-        file = self.cleaned_data.get("text_file")
-        if file and (Path(file.name).suffix.lower() != ".txt" or file.size > 1024 * 1024):
-            raise forms.ValidationError("Envie um arquivo .txt de até 1 MB.")
-        return file
-
     def clean(self):
         data = super().clean()
-        text = data.get("original_text", "").strip()
-        file = data.get("text_file")
-        if text and file:
-            raise forms.ValidationError("Cole o texto ou importe o TXT; use apenas uma dessas opções.")
-        if file:
-            raw = file.read(1024 * 1024 + 1)
-            for encoding in ("utf-8-sig", "cp1252", "latin-1"):
-                try:
-                    text = raw.decode(encoding).strip()
-                    break
-                except UnicodeDecodeError:
-                    continue
-        if not text:
-            raise forms.ValidationError("Informe o texto da notícia ou importe um TXT preenchido.")
-        if len(text) > MAX_TEXT_LENGTH:
-            raise forms.ValidationError("A notícia deve ter no máximo 120 mil caracteres. O texto não foi cortado.")
-        if "\x00" in text:
-            raise forms.ValidationError("O arquivo contém caracteres inválidos para um texto de notícia.")
-        data["original_text"] = text
-        if not data.get("original_title"):
-            data["original_title"] = text.splitlines()[0].strip()[:300]
-        fingerprint = content_fingerprint(text)
-        if Article.objects.filter(fingerprint=fingerprint).exists():
-            raise forms.ValidationError("Este texto já está cadastrado. Localize a notícia no painel para gerar outra versão.")
+        if self.errors:
+            return data
+        text = data.get("original_text", "")
+        files = data["text_file"]
+        if text and files:
+            raise forms.ValidationError("Cole o texto ou envie os arquivos TXT. Use apenas uma dessas opções.")
+        if len(files) > 1 and any(data.get(key) for key in ("original_title", "source_name", "source_url", "source_date")):
+            raise forms.ValidationError("Deixe a identificação em branco ao enviar vários arquivos. Cada notícia usará a primeira linha do seu TXT como título.")
         if data.get("source_url") and Article.objects.filter(source_url=data["source_url"]).exists():
             self.add_error("source_url", "Este link já está cadastrado. Use a notícia existente no painel.")
+
+        inputs = [(file.name, read_uploaded_text(file)) for file in files] if files else [("", text)]
+        articles = {}
+        names = {}
+        for name, text in inputs:
+            label = f"{name}: " if name else ""
+            if not text:
+                raise forms.ValidationError(label + "Informe o texto da notícia ou importe um TXT preenchido.")
+            if len(text) > MAX_TEXT_LENGTH:
+                raise forms.ValidationError(label + "A notícia deve ter no máximo 120 mil caracteres. O texto não foi cortado.")
+            if "\x00" in text:
+                raise forms.ValidationError(label + "O arquivo contém caracteres inválidos para um texto de notícia.")
+            fingerprint = content_fingerprint(text)
+            if fingerprint in articles:
+                raise forms.ValidationError(f"{name} tem o mesmo texto de {names[fingerprint]}.")
+            names[fingerprint] = name
+            articles[fingerprint] = {
+                **data, "original_text": text,
+                "original_title": data.get("original_title") or text.splitlines()[0].strip()[:300],
+            }
+        existing = Article.objects.filter(fingerprint__in=articles).values_list("fingerprint", flat=True)
+        for fingerprint in existing:
+            name = names[fingerprint]
+            label = f"{name}: " if name else ""
+            raise forms.ValidationError(label + "Este texto já está cadastrado. Localize a notícia no painel para gerar outra versão.")
+        data["articles"] = list(articles.values())
+        if len(articles) == 1:
+            data.update(data["articles"][0])
         return data
 
 

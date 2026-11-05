@@ -3,15 +3,16 @@ from io import BytesIO, StringIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
 from news.forms import ArticleForm
-from news.models import Article
+from news.models import Article, SummaryVersion
 from news.processing import process_next
-from news.services import CRITERION_KEYS, decide_version, edit_version
+from news.services import CRITERION_KEYS, create_article, decide_version, edit_version
 
 TEXT = "Título da notícia\nTexto da notícia com informações para sumarização."
 SUMMARY = {"titulo": "Título gerado", "resumo": "Resumo de teste.", "pontos_principais": [], "pessoas": [], "locais": [], "datas": []}
@@ -107,3 +108,61 @@ class ExperimentTests(TestCase):
         self.assertEqual(version.generated_output["_meta"]["ollama"]["eval_count"], 17)
         self.assertEqual(version.generated_output["_resposta_ollama"], "não é json")
         self.assertIsNone(article.public_version_id)
+
+    def test_new_article_remembers_latest_local_model_for_the_current_reviewer(self):
+        endpoint = reverse("admin:news_create")
+        self.assertEqual(self.client.get(endpoint).context["form"]["model"].value(), "")
+        self.create({"original_text": TEXT, "model": "llama3.2:3b"})
+        self.client.post(endpoint, {"original_text": TEXT + " Outra notícia.", "provider": "auto", "model": "gemma3:4b"})
+        self.client.post(endpoint, {"original_text": TEXT + " Terceira notícia.", "provider": "gemini", "model": "gemini-flash"})
+        other = get_user_model().objects.create_superuser("outro")
+        self.client.force_login(other)
+        self.assertEqual(self.client.get(endpoint).context["form"]["model"].value(), "")
+        self.client.post(endpoint, {"original_text": TEXT + " Outra conta.", "model": "qwen3:4b"})
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(endpoint).context["form"]["model"].value(), "gemma3:4b")
+
+    def test_upload_batch_queues_each_file_with_the_selected_model(self):
+        endpoint = reverse("admin:news_create")
+        self.assertContains(self.client.get(endpoint), 'name="text_file" accept=".txt" multiple')
+        titles = [f"Notícia {number}" for number in range(15)]
+        response = self.client.post(endpoint, {
+            "text_file": [SimpleUploadedFile(f"{number}.txt", f"{title}\nTexto completo.".encode())
+                          for number, title in enumerate(titles)],
+            "model": "llama3.2:3b",
+        }, follow=True)
+        self.assertRedirects(response, reverse("admin:index"))
+        self.assertContains(response, "15 notícias salvas e adicionadas à fila")
+        versions = SummaryVersion.objects.order_by("created_at").values_list(
+            "article__original_title", "requested_model", "status", "article__public_version_id",
+        )
+        self.assertEqual(list(versions), [(title, "llama3.2:3b", "queued", None) for title in titles])
+
+    def test_invalid_or_duplicate_file_keeps_entire_batch_out_of_queue(self):
+        endpoint = reverse("admin:news_create")
+        self.create({"original_text": TEXT})
+        for invalid, content in [("repetido.txt", TEXT.encode()), ("invalido.pdf", b"nao e txt"),
+                                 ("vazio.txt", b"   "), ("igual.txt", b"Noticia nova")]:
+            with self.subTest(file=invalid):
+                response = self.client.post(endpoint, {
+                    "text_file": [SimpleUploadedFile("novo.txt", b"Noticia nova"), SimpleUploadedFile(invalid, content)],
+                    "model": "gemma3:4b",
+                })
+                self.assertContains(response, invalid)
+                self.assertEqual(response.context["form"]["model"].value(), "gemma3:4b")
+                self.assertEqual(Article.objects.count(), 1)
+                self.assertEqual(SummaryVersion.objects.count(), 1)
+
+    def test_database_error_rolls_back_articles_already_added_in_the_batch(self):
+        def fail_second(data, user):
+            if data["original_title"] == "Segunda":
+                raise ValidationError("A segunda notícia já está cadastrada.")
+            return create_article(data, user)
+
+        with patch("news.admin.create_article", side_effect=fail_second):
+            response = self.client.post(reverse("admin:news_create"), {
+                "text_file": [SimpleUploadedFile("1.txt", b"Primeira"), SimpleUploadedFile("2.txt", b"Segunda")],
+            })
+        self.assertContains(response, "A segunda notícia já está cadastrada.")
+        self.assertFalse(Article.objects.exists())
+        self.assertFalse(SummaryVersion.objects.exists())

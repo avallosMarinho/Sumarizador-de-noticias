@@ -1,16 +1,18 @@
 {% extends 'news/editorial/base.html' %}
 {% block trail %} › Nova notícia{% endblock %}
 {% block editorial_content %}
-<p class="lead">Cole o texto completo ou envie apenas um TXT. Título, fonte, link e data são opcionais. O resumo será salvo para revisão, antes da publicação.</p>
+<p class="lead">Cole uma notícia ou envie um TXT por notícia. Todos os arquivos do envio usam o mesmo modelo e entram na fila de geração.</p>
 <form method="post" enctype="multipart/form-data" class="editorial-form">{% csrf_token %}{{ form.non_field_errors }}
   <fieldset class="editorial-panel"><legend>1. Notícia original</legend>
   <div class="field-row">{{ form.original_text.label_tag }}{{ form.original_text }}{{ form.original_text.errors }}</div>
-  <div class="field-row">{{ form.text_file.label_tag }}{{ form.text_file }}{{ form.text_file.errors }}</div>
+  <div class="field-row">{{ form.text_file.label_tag }}{{ form.text_file }}{{ form.text_file.errors }}
+    <p class="help">Envie até {{ form.max_txt_files }} arquivos. Cada TXT pode ter até 1 MB e 120 mil caracteres. Se algum arquivo tiver problema, corrija o envio e selecione os arquivos novamente.</p>
+  </div>
   <details {% if form.original_title.errors or form.source_name.errors or form.source_url.errors or form.source_date.errors %}open{% endif %}><summary>Identificação da notícia (opcional)</summary>
   {% for field in form %}{% if field.name == 'original_title' or field.name == 'source_name' or field.name == 'source_url' or field.name == 'source_date' %}<div class="field-row">{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}</div>{% endif %}{% endfor %}
   </details>
-  <p class="help">Aceita texto colado ou TXT de até 1 MB e 120 mil caracteres. O link é uma referência; esta versão não busca o conteúdo do site automaticamente.</p></fieldset>
+  <p class="help">Título, fonte, link e data são opcionais no cadastro de uma notícia. Para vários arquivos, deixe esses campos em branco. Cada notícia usa a primeira linha do TXT como título.</p></fieldset>
   <fieldset class="editorial-panel"><legend>2. Geração do resumo</legend>{% include 'news/editorial/models.html' %}<p class="help">Ollama usa o modelo instalado no notebook. Gemini utiliza a chave configurada no ambiente. O modo heurístico permite testar o fluxo sem IA.</p></fieldset>
-  <div class="form-actions"><button class="action-button" type="submit">Salvar notícia e gerar resumo</button><a class="secondary-button" href="{% url 'admin:index' %}">Cancelar</a></div>
+  <div class="form-actions"><button class="action-button" type="submit">Salvar e adicionar à fila</button><a class="secondary-button" href="{% url 'admin:index' %}">Cancelar</a></div>
 </form>
 {% endblock %}
