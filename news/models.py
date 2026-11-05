@@ -21,6 +21,7 @@ class Article(models.Model):
         related_name="+", verbose_name="versão publicada",
     )
     published_at = models.DateTimeField("publicada em", null=True, blank=True)
+    trashed_at = models.DateTimeField("movida para a lixeira em", null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "notícia"

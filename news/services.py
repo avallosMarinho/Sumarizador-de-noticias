@@ -37,7 +37,11 @@ def normalize_url(url):
 
 def _next_version(article_id):
     # A primeira operação da transação é uma escrita: serializa a numeração no SQLite.
-    Article.objects.filter(pk=article_id).update(version_counter=F("version_counter") + 1)
+    changed = Article.objects.filter(pk=article_id, trashed_at__isnull=True).update(
+        version_counter=F("version_counter") + 1,
+    )
+    if not changed:
+        raise ValidationError("Restaure a notícia da lixeira para gerar ou editar versões.")
     return Article.objects.values_list("version_counter", flat=True).get(pk=article_id)
 
 
@@ -109,7 +113,9 @@ def decide_version(version, user, action, notes="", criteria=None):
         raise ValidationError("Informe o motivo da rejeição.")
     with transaction.atomic():
         status = SummaryVersion.Status.APPROVED if action == Review.Action.APPROVE else SummaryVersion.Status.REJECTED
-        changed = SummaryVersion.objects.filter(pk=version.pk, status=SummaryVersion.Status.PENDING).update(status=status)
+        changed = SummaryVersion.objects.filter(
+            pk=version.pk, status=SummaryVersion.Status.PENDING, article__trashed_at__isnull=True,
+        ).update(status=status)
         if not changed:
             raise ValidationError("Esta versão não está pendente ou já foi avaliada. Atualize a página.")
         Review.objects.create(version=version, reviewer=user, action=action, notes=notes, criteria=criteria)
@@ -125,9 +131,27 @@ def withdraw_article(article, user, notes):
     if not public_id:
         raise ValidationError("Esta notícia não está publicada.")
     with transaction.atomic():
-        changed = Article.objects.filter(pk=article.pk, public_version_id=public_id).update(
-            public_version=None, published_at=None,
-        )
+        changed = Article.objects.filter(
+            pk=article.pk, public_version_id=public_id, trashed_at__isnull=True,
+        ).update(public_version=None, published_at=None)
         if not changed:
             raise ValidationError("A publicação foi alterada. Atualize a página antes de retirar.")
         Review.objects.create(version_id=public_id, reviewer=user, action=Review.Action.WITHDRAW, notes=notes)
+
+
+def move_article_to_trash(article, user):
+    require_reviewer(user)
+    changed = Article.objects.filter(pk=article.pk, trashed_at__isnull=True).exclude(
+        versions__status__in=(SummaryVersion.Status.QUEUED, SummaryVersion.Status.PROCESSING),
+    ).update(trashed_at=timezone.now())
+    if not changed:
+        if Article.objects.filter(pk=article.pk, trashed_at__isnull=False).exists():
+            raise ValidationError("Esta notícia já está na lixeira.")
+        raise ValidationError("Aguarde a geração na fila ou em andamento antes de mover a notícia para a lixeira.")
+
+
+def restore_article(article, user):
+    require_reviewer(user)
+    changed = Article.objects.filter(pk=article.pk, trashed_at__isnull=False).update(trashed_at=None)
+    if not changed:
+        raise ValidationError("Esta notícia já está no painel.")

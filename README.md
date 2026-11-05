@@ -81,6 +81,12 @@ fallback; os tokens não são atribuídos ao resultado heurístico.
 
 As mudanças reutilizam o campo JSON existente: não exigem nova migração.
 
+Para retirar uma notícia da lista de revisão, clique no ícone de lixeira na
+linha da notícia e confirme. Use a aba **Lixeira** para restaurá-la com seu
+histórico de resumos e métricas. Uma notícia publicada fica fora da página
+pública enquanto estiver na lixeira. Aguarde o término de gerações na fila ou
+em andamento antes de mover a notícia.
+
 ## Experimentar o fluxo sem instalar um modelo
 
 1. No painel, clique em **Nova notícia**.

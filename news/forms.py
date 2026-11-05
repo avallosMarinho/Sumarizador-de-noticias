@@ -109,8 +109,12 @@ class ArticleForm(GenerationForm):
             raise forms.ValidationError("Cole o texto ou envie os arquivos TXT. Use apenas uma dessas opções.")
         if len(files) > 1 and any(data.get(key) for key in ("original_title", "source_name", "source_url", "source_date")):
             raise forms.ValidationError("Deixe a identificação em branco ao enviar vários arquivos. Cada notícia usará a primeira linha do seu TXT como título.")
-        if data.get("source_url") and Article.objects.filter(source_url=data["source_url"]).exists():
-            self.add_error("source_url", "Este link já está cadastrado. Use a notícia existente no painel.")
+        if data.get("source_url"):
+            linked = Article.objects.filter(source_url=data["source_url"]).only("trashed_at").first()
+            if linked and linked.trashed_at:
+                self.add_error("source_url", "Este link pertence a uma notícia na lixeira. Restaure a notícia para usá-la.")
+            elif linked:
+                self.add_error("source_url", "Este link já está cadastrado. Use a notícia existente no painel.")
 
         inputs = [(file.name, read_uploaded_text(file)) for file in files] if files else [("", text)]
         articles = {}
@@ -131,10 +135,12 @@ class ArticleForm(GenerationForm):
                 **data, "original_text": text,
                 "original_title": data.get("original_title") or text.splitlines()[0].strip()[:300],
             }
-        existing = Article.objects.filter(fingerprint__in=articles).values_list("fingerprint", flat=True)
-        for fingerprint in existing:
+        existing = Article.objects.filter(fingerprint__in=articles).values_list("fingerprint", "trashed_at")
+        for fingerprint, trashed_at in existing:
             name = names[fingerprint]
             label = f"{name}: " if name else ""
+            if trashed_at:
+                raise forms.ValidationError(label + "Esta notícia está na lixeira. Restaure-a para gerar outra versão.")
             raise forms.ValidationError(label + "Este texto já está cadastrado. Localize a notícia no painel para gerar outra versão.")
         data["articles"] = list(articles.values())
         if len(articles) == 1:
