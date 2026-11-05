@@ -1,0 +1,26 @@
+{% extends 'news/editorial/base.html' %}
+{% block trail %} › Nova rodada{% endblock %}
+{% block editorial_content %}
+<p class="lead">Use os TXT originais para gerar novas versões de notícias já cadastradas com um modelo Ollama.</p>
+<form method="post" enctype="multipart/form-data" class="editorial-form">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  <fieldset class="editorial-panel">
+    <legend>1. Notícias da rodada</legend>
+    <div class="field-row">
+      {{ form.text_file.label_tag }}{{ form.text_file }}{{ form.text_file.errors }}
+      <p class="help" id="{{ form.text_file.auto_id }}_helptext">{{ form.text_file.help_text }}</p>
+    </div>
+    <p class="help">O painel localiza as notícias pelo conteúdo dos TXT. Se precisar corrigir o envio, selecione os arquivos novamente.</p>
+  </fieldset>
+  <fieldset class="editorial-panel">
+    <legend>2. Modelo Ollama</legend>
+    {% include 'news/editorial/models.html' %}
+    <p class="help">Cada resumo entra na fila e fica disponível no histórico da notícia para revisão.</p>
+  </fieldset>
+  <div class="form-actions">
+    <button class="action-button" type="submit">Adicionar rodada à fila</button>
+    <a class="secondary-button" href="{% url 'admin:index' %}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

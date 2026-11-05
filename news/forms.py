@@ -51,6 +51,8 @@ class MultipleTxtInput(forms.ClearableFileInput):
 class TxtFilesField(forms.FileField):
     def clean(self, data, initial=None):
         files = data if isinstance(data, (list, tuple)) else [data] if data else []
+        if not files and self.required:
+            raise forms.ValidationError(self.error_messages["required"], code="required")
         if len(files) > MAX_TXT_FILES:
             raise forms.ValidationError(f"Envie até {MAX_TXT_FILES} arquivos por vez.")
         cleaned = []
@@ -72,6 +74,16 @@ def read_uploaded_text(file):
             return raw.decode(encoding).strip()
         except UnicodeDecodeError:
             continue
+
+
+def validate_original_text(text, name=""):
+    label = f"{name}: " if name else ""
+    if not text:
+        raise forms.ValidationError(label + "Informe o texto da notícia ou importe um TXT preenchido.")
+    if len(text) > MAX_TEXT_LENGTH:
+        raise forms.ValidationError(label + "A notícia deve ter no máximo 120 mil caracteres. O texto não foi cortado.")
+    if "\x00" in text:
+        raise forms.ValidationError(label + "O arquivo contém caracteres inválidos para um texto de notícia.")
 
 
 class ArticleForm(GenerationForm):
@@ -116,13 +128,7 @@ class ArticleForm(GenerationForm):
         articles = {}
         names = {}
         for name, text in inputs:
-            label = f"{name}: " if name else ""
-            if not text:
-                raise forms.ValidationError(label + "Informe o texto da notícia ou importe um TXT preenchido.")
-            if len(text) > MAX_TEXT_LENGTH:
-                raise forms.ValidationError(label + "A notícia deve ter no máximo 120 mil caracteres. O texto não foi cortado.")
-            if "\x00" in text:
-                raise forms.ValidationError(label + "O arquivo contém caracteres inválidos para um texto de notícia.")
+            validate_original_text(text, name)
             fingerprint = content_fingerprint(text)
             if fingerprint in articles:
                 raise forms.ValidationError(f"{name} tem o mesmo texto de {names[fingerprint]}.")
@@ -139,6 +145,43 @@ class ArticleForm(GenerationForm):
         data["articles"] = list(articles.values())
         if len(articles) == 1:
             data.update(data["articles"][0])
+        return data
+
+
+class ExperimentRoundForm(GenerationForm):
+    provider = forms.ChoiceField(
+        choices=[("ollama", "Ollama")], initial="ollama", disabled=True, widget=forms.HiddenInput,
+    )
+    text_file = TxtFilesField(
+        label="Arquivos TXT das notícias já cadastradas",
+        help_text=f"Selecione os mesmos TXT usados no cadastro. Você pode enviar até {MAX_TXT_FILES} arquivos.",
+        widget=MultipleTxtInput(attrs={"accept": ".txt"}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["model"].required = True
+        self.fields["model"].help_text = "Escolha o modelo Ollama para toda a rodada."
+
+    def clean(self):
+        data = super().clean()
+        if self.errors:
+            return data
+
+        names = {}
+        for file in data["text_file"]:
+            text = read_uploaded_text(file)
+            validate_original_text(text, file.name)
+            fingerprint = content_fingerprint(text)
+            if fingerprint in names:
+                raise forms.ValidationError(f"{file.name} tem o mesmo texto de {names[fingerprint]}.")
+            names[fingerprint] = file.name
+
+        articles = Article.objects.in_bulk(names, field_name="fingerprint")
+        missing = [name for fingerprint, name in names.items() if fingerprint not in articles]
+        if missing:
+            raise forms.ValidationError("TXT sem notícia cadastrada correspondente: " + ", ".join(missing))
+        data["articles"] = [articles[fingerprint] for fingerprint in names]
         return data
 
 

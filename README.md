@@ -50,6 +50,13 @@ O provedor padrão é Ollama e o modelo padrão, quando não informado, é
 instalado desejado. O modo automático permite fallback heurístico e deve ser
 tratado como outra condição experimental.
 
+Para comparar os mesmos textos com outro modelo, abra **Nova rodada** no painel.
+Selecione os TXT originais e escolha um modelo Ollama para o lote. O painel
+localiza as notícias pelo conteúdo e adiciona uma versão por notícia à fila.
+Se algum TXT não corresponder a um cadastro ou alguma notícia já estiver em
+geração, corrija o lote antes de enviar. As versões ficam no histórico de cada
+notícia, com o mesmo identificador do original para comparar as exportações.
+
 Execute `python manage.py runlocal`, solicite a geração no painel e feche o
 navegador se quiser economizar memória. Mantenha o terminal aberto: ele informa
 início, conclusão ou falha, com identificação da notícia, versão, modelo e duração.

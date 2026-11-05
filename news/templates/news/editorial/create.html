@@ -2,6 +2,7 @@
 {% block trail %} › Nova notícia{% endblock %}
 {% block editorial_content %}
 <p class="lead">Cole uma notícia ou envie um TXT por notícia. Todos os arquivos do envio usam o mesmo modelo e entram na fila de geração.</p>
+<p>Já cadastrou estes textos? <a href="{% url 'admin:news_experiment_round' %}">Gerar uma nova rodada</a>.</p>
 <form method="post" enctype="multipart/form-data" class="editorial-form">{% csrf_token %}{{ form.non_field_errors }}
   <fieldset class="editorial-panel"><legend>1. Notícia original</legend>
   <div class="field-row">{{ form.original_text.label_tag }}{{ form.original_text }}{{ form.original_text.errors }}</div>

@@ -15,7 +15,7 @@ from django.urls import path, reverse
 
 from summarizer.providers import DEFAULT_OLLAMA_MODEL
 
-from .forms import ArticleForm, DecisionForm, EditSummaryForm, GenerationForm, WithdrawalForm
+from .forms import ArticleForm, DecisionForm, EditSummaryForm, ExperimentRoundForm, GenerationForm, WithdrawalForm
 from .models import Article, Review, SummaryVersion
 from .ollama import ModelListUnavailable, list_installed_models
 from .services import create_article, decide_version, edit_version, enqueue_generation, require_reviewer, withdraw_article
@@ -33,6 +33,7 @@ class EditorialSite(admin.AdminSite):
             path("administracao/<str:section>/", self.admin_view(self.administration), name="news_administration"),
             path("modelos/ollama/", self.admin_view(self.ollama_models), name="news_ollama_models"),
             path("noticias/nova/", self.admin_view(self.create), name="news_create"),
+            path("noticias/rodada/", self.admin_view(self.experiment_round), name="news_experiment_round"),
             path("noticias/<uuid:pk>/", self.admin_view(self.article), name="news_review"),
             path("noticias/<uuid:pk>/gerar/", self.admin_view(self.generate), name="news_generate"),
             path("noticias/<uuid:pk>/retirar/", self.admin_view(self.withdraw), name="news_withdraw"),
@@ -127,6 +128,28 @@ class EditorialSite(admin.AdminSite):
                     messages.success(request, f"{len(articles)} notícias salvas e adicionadas à fila de geração.")
                     return redirect("admin:index")
         return self.page(request, "news/editorial/create.html", "Nova notícia", form=form)
+
+    def experiment_round(self, request):
+        require_reviewer(request.user)
+        if request.method not in {"GET", "POST"}:
+            return HttpResponseNotAllowed(["GET", "POST"])
+        form = ExperimentRoundForm()
+        if request.method == "POST":
+            form = ExperimentRoundForm(request.POST, request.FILES)
+            if form.is_valid():
+                data = form.cleaned_data
+                try:
+                    with transaction.atomic():
+                        for article in data["articles"]:
+                            enqueue_generation(article, request.user, provider=data["provider"], model=data["model"])
+                except ValidationError as exc:
+                    form.add_error(None, f"{article.original_title}: {' '.join(exc.messages)}")
+                else:
+                    count = len(data["articles"])
+                    unit = "resumo" if count == 1 else "resumos"
+                    messages.success(request, f"{count} {unit} de {data['model']} na fila de geração.")
+                    return redirect("admin:index")
+        return self.page(request, "news/editorial/experiment_round.html", "Nova rodada", form=form)
 
     def review_context(self, article, version=None, decision_form=None, withdrawal_form=None):
         versions = list(article.versions.select_related("created_by").order_by("-number"))

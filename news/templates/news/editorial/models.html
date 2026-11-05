@@ -1,5 +1,7 @@
 <div class="form-grid" data-model-picker data-models-url="{% url 'admin:news_ollama_models' %}">
+  {% if form.provider.is_hidden %}{{ form.provider }}{{ form.provider.errors }}{% else %}
   <div class="field-row">{{ form.provider.label_tag }}{{ form.provider }}{{ form.provider.errors }}</div>
+  {% endif %}
   <div class="field-row">
     {{ form.model.label_tag }}{{ form.model }}{{ form.model.errors }}
     <datalist id="model-options"></datalist>
