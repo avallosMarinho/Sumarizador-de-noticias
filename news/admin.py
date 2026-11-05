@@ -6,6 +6,7 @@ from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group, User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, OuterRef, Q, Subquery
 from django.http import Http404, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
@@ -106,15 +107,25 @@ class EditorialSite(admin.AdminSite):
         require_reviewer(request.user)
         if request.method not in {"GET", "POST"}:
             return HttpResponseNotAllowed(["GET", "POST"])
-        form = ArticleForm(request.POST or None, request.FILES or None)
-        if request.method == "POST" and form.is_valid():
-            try:
-                article = create_article(form.cleaned_data, request.user)
-            except ValidationError as exc:
-                form.add_error(None, exc)
-            else:
-                messages.success(request, "Notícia salva. O resumo entrou na fila de geração.")
-                return redirect("admin:news_review", article.pk)
+        if request.method == "GET":
+            last_model = SummaryVersion.objects.filter(
+                created_by=request.user, origin="model", requested_provider__in=("ollama", "auto"),
+            ).exclude(requested_model="").order_by("-created_at", "-pk").values_list("requested_model", flat=True).first()
+            form = ArticleForm(initial={"model": last_model or ""})
+        else:
+            form = ArticleForm(request.POST, request.FILES)
+            if form.is_valid():
+                try:
+                    with transaction.atomic():
+                        articles = [create_article(data, request.user) for data in form.cleaned_data["articles"]]
+                except ValidationError as exc:
+                    form.add_error(None, exc)
+                else:
+                    if len(articles) == 1:
+                        messages.success(request, "Notícia salva. O resumo entrou na fila de geração.")
+                        return redirect("admin:news_review", articles[0].pk)
+                    messages.success(request, f"{len(articles)} notícias salvas e adicionadas à fila de geração.")
+                    return redirect("admin:index")
         return self.page(request, "news/editorial/create.html", "Nova notícia", form=form)
 
     def review_context(self, article, version=None, decision_form=None, withdrawal_form=None):

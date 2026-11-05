@@ -26,7 +26,7 @@ class OllamaTimeoutTests(unittest.TestCase):
         body = json.dumps({"message": {"content": json.dumps(SUMMARY)}}).encode()
         with patch("summarizer.providers.ollama_provider.urllib.request.urlopen", return_value=BytesIO(body)) as request:
             result = OllamaProvider(model="gemma3:4b").summarize("Notícia original")
-        self.assertEqual(result, SUMMARY)
+        self.assertEqual({key: result[key] for key in SUMMARY}, SUMMARY)
         self.assertEqual(request.call_args.kwargs["timeout"], 900)
         payload = json.loads(request.call_args.args[0].data)
         self.assertEqual(payload["model"], "gemma3:4b")

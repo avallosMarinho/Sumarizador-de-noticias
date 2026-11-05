@@ -40,7 +40,7 @@ class Command(BaseCommand):
             try:
                 while True:
                     close_old_connections()
-                    processed = process_next()
+                    processed = process_next(report=self.stdout.write)
                     if options["once"]:
                         break
                     if not processed:
