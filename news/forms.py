@@ -9,13 +9,6 @@ from .services import content_fingerprint, normalize_url
 MAX_TEXT_LENGTH = 120_000
 MAX_TXT_BYTES = 1024 * 1024
 MAX_TXT_FILES = 20
-CRITERIA = {
-    "fidelity": "Fidelidade: fatos, nomes, datas e números conferem com o original.",
-    "coverage": "Cobertura: as informações essenciais foram preservadas.",
-    "conciseness": "Concisão: o texto está breve e sem detalhes acessórios.",
-    "coherence": "Coerência: a leitura é clara e as relações entre os fatos estão corretas.",
-    "redundancy": "Ausência de redundância: o texto evita repetições.",
-}
 
 
 class GenerationForm(forms.Form):
@@ -165,21 +158,10 @@ class EditSummaryForm(forms.Form):
 
 class DecisionForm(forms.Form):
     action = forms.ChoiceField(choices=[(Review.Action.APPROVE, "Aprovar"), (Review.Action.REJECT, "Rejeitar")])
-    notes = forms.CharField(label="Observação ou motivo da rejeição", required=False, max_length=4000,
-                           widget=forms.Textarea(attrs={"rows": 3}))
-    fidelity = forms.BooleanField(label=CRITERIA["fidelity"], required=False)
-    coverage = forms.BooleanField(label=CRITERIA["coverage"], required=False)
-    conciseness = forms.BooleanField(label=CRITERIA["conciseness"], required=False)
-    coherence = forms.BooleanField(label=CRITERIA["coherence"], required=False)
-    redundancy = forms.BooleanField(label=CRITERIA["redundancy"], required=False)
-
-    def clean(self):
-        data = super().clean()
-        if data.get("action") == Review.Action.APPROVE and not all(data.get(key) for key in CRITERIA):
-            raise forms.ValidationError("Confira e marque os cinco critérios antes de aprovar a publicação.")
-        if data.get("action") == Review.Action.REJECT and not data.get("notes", "").strip():
-            self.add_error("notes", "Informe o motivo da rejeição.")
-        return data
+    notes = forms.CharField(
+        label="Observação ou motivo da rejeição (opcional)", required=False, max_length=4000,
+        widget=forms.Textarea(attrs={"rows": 3}),
+    )
 
 
 class WithdrawalForm(forms.Form):

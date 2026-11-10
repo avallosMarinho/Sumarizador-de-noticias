@@ -368,30 +368,6 @@ fieldset.editorial-panel {
 .version-heading h2 {
   margin: 0;
 }
-.review-checks {
-  display: grid;
-  gap: 14px;
-  margin-block: 22px;
-}
-.editorial .review-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  font-size: 13px;
-  font-weight: 400;
-  cursor: pointer;
-  line-height: 1.6;
-}
-.review-check input {
-  flex-shrink: 0;
-  margin-top: 4px;
-  width: 17px;
-  height: 17px;
-  accent-color: var(--link-fg);
-}
-.review-check span {
-  flex: 1;
-}
 .review-record {
   display: flex;
   flex-direction: column;

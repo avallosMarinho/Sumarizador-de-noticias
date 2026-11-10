@@ -11,7 +11,7 @@ from django.urls import reverse
 from news.forms import ArticleForm
 from news.models import Article, Review, SummaryVersion
 from news.processing import process_next
-from news.services import CRITERION_KEYS, create_article, decide_version, edit_version, enqueue_generation, withdraw_article
+from news.services import create_article, decide_version, edit_version, enqueue_generation, withdraw_article
 
 TEXT = (
     "Biblioteca oferece oficinas de programação\n\n"
@@ -19,7 +19,6 @@ TEXT = (
     "Serão ofertadas 30 vagas para estudantes. As inscrições vão até 20 de outubro. "
     "As atividades ocorrerão no Laboratório 2, das 14h às 17h."
 )
-CRITERIA = {key: True for key in CRITERION_KEYS}
 
 
 class WorkflowTests(TestCase):
@@ -48,7 +47,7 @@ class WorkflowTests(TestCase):
         return article, version
 
     def approve(self, version):
-        decide_version(version, self.reviewer, Review.Action.APPROVE, criteria=CRITERIA)
+        decide_version(version, self.reviewer, Review.Action.APPROVE)
         version.refresh_from_db()
 
     def test_creation_and_real_heuristic_processing_do_not_publish(self):
@@ -62,33 +61,48 @@ class WorkflowTests(TestCase):
 
     def test_exact_reviewed_version_is_published_and_audited(self):
         article, version = self.ready()
-        response = self.client.post(reverse("admin:news_decide", args=[version.pk]), {"action": "approve", **CRITERIA})
+        review_page = self.client.get(reverse("admin:news_review", args=[article.pk]))
+        self.assertContains(review_page, "Observação ou motivo da rejeição (opcional)")
+        self.assertNotContains(review_page, 'type="checkbox"')
+        response = self.client.post(reverse("admin:news_decide", args=[version.pk]), {"action": "approve"})
         self.assertEqual(response.status_code, 302)
         article.refresh_from_db()
         self.assertEqual(article.public_version_id, version.pk)
         review = Review.objects.get(version=version)
         self.assertEqual(review.reviewer, self.reviewer)
-        self.assertEqual(review.criteria, CRITERIA)
+        self.assertEqual(review.notes, "")
+        self.assertEqual(review.criteria, {})
         self.assertContains(Client().get(article.get_absolute_url()), version.summary)
 
-    def test_approval_requires_all_human_checks(self):
+    def test_approval_requires_a_complete_summary(self):
         article, version = self.ready()
+        SummaryVersion.objects.filter(pk=version.pk).update(summary="")
         response = self.client.post(reverse("admin:news_decide", args=[version.pk]), {"action": "approve"})
-        self.assertContains(response, "cinco critérios")
+        self.assertContains(response, "O título e o resumo precisam estar preenchidos.")
         article.refresh_from_db()
         self.assertIsNone(article.public_version_id)
         self.assertFalse(Review.objects.exists())
 
-    def test_rejection_requires_reason_and_stays_private(self):
+    def test_rejection_without_reason_stays_private(self):
         article, version = self.ready()
         endpoint = reverse("admin:news_decide", args=[version.pk])
-        self.assertContains(self.client.post(endpoint, {"action": "reject"}), "Informe o motivo")
-        response = self.client.post(endpoint, {"action": "reject", "notes": "Faltam datas importantes."})
+        response = self.client.post(endpoint, {"action": "reject"})
         self.assertEqual(response.status_code, 302)
         version.refresh_from_db()
         self.assertEqual(version.status, SummaryVersion.Status.REJECTED)
-        self.assertEqual(Review.objects.get().notes, "Faltam datas importantes.")
+        self.assertEqual(Review.objects.get(version=version).notes, "")
         self.assertEqual(Client().get(article.get_absolute_url()).status_code, 404)
+
+    def test_note_is_saved_with_either_decision_when_provided(self):
+        for action in (Review.Action.APPROVE, Review.Action.REJECT):
+            with self.subTest(action=action):
+                article, version = self.ready(f" {action}")
+                note = "Observação da equipe editorial."
+                response = self.client.post(reverse("admin:news_decide", args=[version.pk]), {
+                    "action": action, "notes": note,
+                })
+                self.assertRedirects(response, reverse("admin:news_review", args=[article.pk]))
+                self.assertEqual(Review.objects.get(version=version).notes, note)
 
     def test_regeneration_preserves_publication_and_original_text(self):
         article, version = self.ready()
@@ -239,7 +253,7 @@ class WorkflowTests(TestCase):
         denied.force_login(self.staff)
         for endpoint in endpoints:
             self.assertEqual(denied.get(endpoint).status_code, 403)
-        self.assertEqual(denied.post(reverse("admin:news_decide", args=[version.pk]), {"action": "approve", **CRITERIA}).status_code, 403)
+        self.assertEqual(denied.post(reverse("admin:news_decide", args=[version.pk]), {"action": "approve"}).status_code, 403)
         with self.assertRaises(PermissionDenied):
             enqueue_generation(article, self.staff, "heuristic")
 
@@ -249,7 +263,7 @@ class WorkflowTests(TestCase):
             self.assertEqual(self.client.get(endpoint).status_code, 405)
         protected = Client(enforce_csrf_checks=True)
         protected.force_login(self.reviewer)
-        self.assertEqual(protected.post(reverse("admin:news_decide", args=[version.pk]), {"action": "approve", **CRITERIA}).status_code, 403)
+        self.assertEqual(protected.post(reverse("admin:news_decide", args=[version.pk]), {"action": "approve"}).status_code, 403)
 
     def test_generic_admin_cannot_edit_or_delete_editorial_records(self):
         article, version = self.ready()
@@ -410,7 +424,7 @@ class WorkflowTests(TestCase):
         with self.assertRaises(ValidationError):
             enqueue_generation(article, self.reviewer, "heuristic")
         with self.assertRaises(ValidationError):
-            decide_version(version, self.reviewer, Review.Action.APPROVE, criteria=CRITERIA)
+            decide_version(version, self.reviewer, Review.Action.APPROVE)
         form = ArticleForm({"original_text": article.original_text})
         self.assertFalse(form.is_valid())
         self.assertIn("Esta notícia está na lixeira", str(form.non_field_errors()))

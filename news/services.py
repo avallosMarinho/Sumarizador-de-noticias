@@ -13,8 +13,6 @@ from summarizer.contract import SYSTEM_PROMPT
 from summarizer.providers import DEFAULT_GEMINI_MODEL, DEFAULT_OLLAMA_MODEL
 from .models import Article, Review, SummaryVersion
 
-CRITERION_KEYS = ("fidelity", "coverage", "conciseness", "coherence", "redundancy")
-
 
 def require_reviewer(user):
     if not (user.is_active and user.is_staff and user.has_perm("news.review_summary")):
@@ -99,18 +97,12 @@ def edit_version(source, data, user):
         )
 
 
-def decide_version(version, user, action, notes="", criteria=None):
+def decide_version(version, user, action, notes=""):
     require_reviewer(user)
-    criteria = criteria or {}
     if action not in {Review.Action.APPROVE, Review.Action.REJECT}:
         raise ValidationError("Decisão inválida.")
-    if action == Review.Action.APPROVE:
-        if not all(criteria.get(key) is True for key in CRITERION_KEYS):
-            raise ValidationError("Confirme os cinco critérios de revisão antes de aprovar.")
-        if not version.title.strip() or not version.summary.strip():
-            raise ValidationError("O título e o resumo precisam estar preenchidos.")
-    elif not notes.strip():
-        raise ValidationError("Informe o motivo da rejeição.")
+    if action == Review.Action.APPROVE and (not version.title.strip() or not version.summary.strip()):
+        raise ValidationError("O título e o resumo precisam estar preenchidos.")
     with transaction.atomic():
         status = SummaryVersion.Status.APPROVED if action == Review.Action.APPROVE else SummaryVersion.Status.REJECTED
         changed = SummaryVersion.objects.filter(
@@ -118,7 +110,7 @@ def decide_version(version, user, action, notes="", criteria=None):
         ).update(status=status)
         if not changed:
             raise ValidationError("Esta versão não está pendente ou já foi avaliada. Atualize a página.")
-        Review.objects.create(version=version, reviewer=user, action=action, notes=notes, criteria=criteria)
+        Review.objects.create(version=version, reviewer=user, action=action, notes=notes)
         if action == Review.Action.APPROVE:
             Article.objects.filter(pk=version.article_id).update(public_version=version, published_at=timezone.now())
 

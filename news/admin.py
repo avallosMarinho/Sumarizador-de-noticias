@@ -196,12 +196,11 @@ class EditorialSite(admin.AdminSite):
         if form.is_valid():
             try:
                 data = form.cleaned_data
-                criteria = {key: data[key] for key in ("fidelity", "coverage", "conciseness", "coherence", "redundancy")}
-                decide_version(version, request.user, data["action"], data["notes"], criteria)
+                decide_version(version, request.user, data["action"], data["notes"])
             except ValidationError as exc:
                 form.add_error(None, exc)
             else:
-                messages.success(request, "Resumo aprovado e publicado." if data["action"] == "approve" else "Resumo rejeitado. Motivo registrado no histórico.")
+                messages.success(request, "Resumo aprovado e publicado." if data["action"] == "approve" else "Resumo rejeitado.")
                 return redirect("admin:news_review", version.article_id)
         return self.page(request, "news/editorial/review.html", version.article.original_title,
                          **self.review_context(version.article, version, decision_form=form))
