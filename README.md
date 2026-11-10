@@ -81,6 +81,12 @@ fallback; os tokens não são atribuídos ao resultado heurístico.
 
 As mudanças reutilizam o campo JSON existente: não exigem nova migração.
 
+Para retirar uma notícia da lista de revisão, clique no ícone de lixeira na
+linha da notícia e confirme. Use a aba **Lixeira** para restaurá-la com seu
+histórico de resumos e métricas. Uma notícia publicada fica fora da página
+pública enquanto estiver na lixeira. Aguarde o término de gerações na fila ou
+em andamento antes de mover a notícia.
+
 ## Experimentar o fluxo sem instalar um modelo
 
 1. No painel, clique em **Nova notícia**.
@@ -90,7 +96,7 @@ As mudanças reutilizam o campo JSON existente: não exigem nova migração.
 4. Em **Como gerar**, escolha **Heurístico · experimentar sem IA** e salve.
 5. Aguarde a geração. A tela atualiza automaticamente enquanto o resumo está na fila.
 6. Compare original e resumo, confira também pontos principais, pessoas, locais e datas.
-7. Marque os cinco critérios de qualidade e clique em **Aprovar e publicar**.
+7. Deixe uma observação se desejar. Clique em **Aprovar e publicar**.
 8. Abra a página de leitura para conferir o cartão publicado.
 
 O modo heurístico serve para testar o funcionamento sem depender de uma IA; ele
@@ -168,12 +174,14 @@ saída; para superusuários, também oferece **Gerenciar acesso da equipe** e
 
 - **Editar como nova versão:** preserva o resultado original do modelo e cria uma
   versão pendente, mesmo quando o resumo anterior já está publicado.
-- **Rejeitar com motivo:** registra a decisão e mantém essa versão fora da página pública.
+- **Rejeitar:** registra a decisão e mantém essa versão fora da página pública.
 - **Gerar outra versão:** usa novamente a notícia original, com o provedor escolhido.
-- **Aprovar e publicar:** exige a confirmação dos cinco critérios e publica exatamente
-  a versão visualizada. Registra responsável, data, observação e critérios confirmados.
+- **Aprovar e publicar:** publica exatamente a versão visualizada.
 - **Retirar publicação:** exige um motivo, remove a notícia da listagem e do endereço
   público e preserva todos os registros internos.
+
+A aprovação e a rejeição registram responsável e data. A observação ou o motivo
+da rejeição é opcional e fica no histórico quando preenchido.
 
 Uma versão aprovada permanece pública durante novas gerações, edições ou rejeições
 de outras versões. Ela só é substituída por outra aprovação ou retirada explicitamente.

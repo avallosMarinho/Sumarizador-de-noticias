@@ -9,14 +9,41 @@
   <a href="?state=failed&amp;q={{ query|urlencode }}" {% if state == 'failed' %}aria-current="page"{% endif %}>Com falha <span>{{ counts.failed }}</span></a>
   <a href="?state=published&amp;q={{ query|urlencode }}" {% if state == 'published' %}aria-current="page"{% endif %}>Publicadas <span>{{ counts.published }}</span></a>
   <a href="?state=rejected&amp;q={{ query|urlencode }}" {% if state == 'rejected' %}aria-current="page"{% endif %}>Rejeitadas <span>{{ counts.rejected }}</span></a>
+  <a href="?state=trash&amp;q={{ query|urlencode }}" {% if state == 'trash' %}aria-current="page"{% endif %}>Lixeira <span>{{ counts.trash }}</span></a>
 </nav>
 <div class="dashboard-search-row"><form class="editorial-search" method="get"><input type="hidden" name="state" value="{{ state }}"><label for="q" class="editorial-sr-only">Buscar notícia pelo título</label><input id="q" type="search" name="q" value="{{ query }}" maxlength="150" placeholder="Buscar notícia pelo título…"><button type="submit">Buscar</button>{% if query %}<a href="?state={{ state|urlencode }}">Limpar busca</a>{% endif %}</form><span class="muted-text">{{ page_obj.paginator.count }} notícia{{ page_obj.paginator.count|pluralize:"s" }}{% if query %} encontrada{{ page_obj.paginator.count|pluralize:"s" }}{% endif %}</span></div>
 {% if page_obj %}<div class="dashboard-list"><table class="editorial-table dashboard-table"><thead><tr><th scope="col">Notícia</th><th scope="col">Última versão</th><th scope="col">Publicação</th><th scope="col">Ação</th></tr></thead><tbody>
 {% for article in page_obj %}<tr>
-<td><a class="article-title" href="{% url 'admin:news_review' article.pk %}">{{ article.original_title }}</a><small>{{ article.source_name|default:'Fonte não informada' }} · {{ article.created_at|date:'d/m/Y H:i' }}</small></td>
+<td>
+  {% if state == 'trash' %}
+  <strong>{{ article.original_title }}</strong><small>Na lixeira desde {{ article.trashed_at|date:'d/m/Y H:i' }}</small>
+  {% else %}
+  <a class="article-title" href="{% url 'admin:news_review' article.pk %}">{{ article.original_title }}</a><small>{{ article.source_name|default:'Fonte não informada' }} · {{ article.created_at|date:'d/m/Y H:i' }}</small>
+  {% endif %}
+</td>
 <td data-label="Última versão"><span class="status-badge status-{{ article.latest_status }}">{% if article.latest_status == 'pending' %}Pronta para revisão{% else %}{{ article.latest_status|status_label }}{% endif %}</span><small>Versão {{ article.latest_number|default:'—' }}</small></td>
-<td data-label="Publicação">{% if article.public_version_id %}<span class="published-label">Publicada</span><small>Versão {{ article.public_version.number }} no ar</small>{% else %}<span class="muted-text">Não publicada</span>{% endif %}</td>
-<td class="dashboard-action"><a class="secondary-button" href="{% url 'admin:news_review' article.pk %}">{% if article.latest_status == 'pending' %}Revisar{% elif article.latest_status == 'queued' or article.latest_status == 'processing' %}Acompanhar{% elif article.latest_status == 'failed' %}Ver falha{% else %}Ver detalhes{% endif %}<span class="editorial-sr-only">: {{ article.original_title }}</span></a></td>
+<td data-label="Publicação">
+  {% if article.public_version_id and state == 'trash' %}<span class="muted-text">Fora do ar</span>
+  {% elif article.public_version_id %}<span class="published-label">Publicada</span><small>Versão {{ article.public_version.number }} no ar</small>
+  {% else %}<span class="muted-text">Não publicada</span>{% endif %}
+</td>
+<td class="dashboard-action">
+  {% if state == 'trash' %}
+  <form method="post" action="{% url 'admin:news_restore' article.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="secondary-button">Restaurar{% if article.public_version_id %} e republicar{% endif %}<span class="editorial-sr-only"> {{ article.original_title }}</span></button>
+  </form>
+  {% else %}
+  <div class="dashboard-actions">
+    <a class="secondary-button" href="{% url 'admin:news_review' article.pk %}">{% if article.latest_status == 'pending' %}Revisar{% elif article.latest_status == 'queued' or article.latest_status == 'processing' %}Acompanhar{% elif article.latest_status == 'failed' %}Ver falha{% else %}Ver detalhes{% endif %}<span class="editorial-sr-only">: {{ article.original_title }}</span></a>
+    <a class="reject-button trash-button" href="{% url 'admin:news_trash' article.pk %}?{{ dashboard_query }}" aria-label="Mover {{ article.original_title }} para a lixeira" title="Mover para a lixeira">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <path d="M3 6h18M8 6V4h8v2M5 6l1 14h12l1-14M10 10v6m4-6v6"/>
+      </svg>
+    </a>
+  </div>
+  {% endif %}
+</td>
 </tr>{% endfor %}</tbody></table></div>
 {% else %}<div class="editorial-empty"><h2>{% if query or state %}Nenhuma notícia encontrada{% else %}Sua redação começa aqui{% endif %}</h2><p>{% if query or state %}Tente outra busca ou consulte todas as notícias.{% else %}Cadastre uma notícia, gere o resumo e confira o resultado antes de publicar.{% endif %}</p>{% if query or state %}<a href="{% url 'admin:index' %}">Ver todas as notícias →</a>{% else %}<a href="{% url 'admin:news_create' %}">Cadastrar notícia →</a>{% endif %}</div>{% endif %}
 {% if page_obj.has_other_pages %}<nav class="editorial-pagination" aria-label="Paginação">{% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&amp;state={{ state|urlencode }}&amp;page={{ page_obj.previous_page_number }}">← Anteriores</a>{% endif %}<span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&amp;state={{ state|urlencode }}&amp;page={{ page_obj.next_page_number }}">Próximas →</a>{% endif %}</nav>{% endif %}

@@ -12,7 +12,7 @@ from django.urls import reverse
 from news.forms import ArticleForm
 from news.models import Article, SummaryVersion
 from news.processing import process_next
-from news.services import CRITERION_KEYS, create_article, decide_version, edit_version
+from news.services import create_article, decide_version, edit_version
 
 TEXT = "Título da notícia\nTexto da notícia com informações para sumarização."
 SUMMARY = {"titulo": "Título gerado", "resumo": "Resumo de teste.", "pontos_principais": [], "pessoas": [], "locais": [], "datas": []}
@@ -83,7 +83,7 @@ class ExperimentTests(TestCase):
         edited = edit_version(version, {"title": "Editado", "summary": "Resumo editado", "points": [], "people": [], "places": [], "dates": []}, self.user)
         self.assertEqual(edited.generated_output, version.generated_output)
         self.assertContains(self.client.get(reverse("admin:news_review", args=[article.pk])), "Tempo da geração de origem")
-        decide_version(version, self.user, "approve", criteria={key: True for key in CRITERION_KEYS})
+        decide_version(version, self.user, "approve")
         self.assertContains(self.client.get(article.get_absolute_url()), "Resumo de teste.")
 
     def test_failure_logs_and_duration_are_saved(self):
