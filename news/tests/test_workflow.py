@@ -11,7 +11,9 @@ from django.urls import reverse
 from news.forms import ArticleForm
 from news.models import Article, Review, SummaryVersion
 from news.processing import process_next
-from news.services import create_article, decide_version, edit_version, enqueue_generation, withdraw_article
+from news.services import (
+    create_article, decide_version, edit_version, enqueue_generation, restore_article, withdraw_article,
+)
 
 TEXT = (
     "Biblioteca oferece oficinas de programação\n\n"
@@ -414,7 +416,7 @@ class WorkflowTests(TestCase):
                 self.assertIsNone(article.trashed_at)
                 self.assertEqual(article.versions.get().status, status)
 
-    def test_trashed_news_rejects_new_versions_and_points_to_restore(self):
+    def test_trashed_news_rejects_new_versions_but_allows_a_new_registration(self):
         article, version = self.ready()
         self.client.post(reverse("admin:news_trash", args=[article.pk]))
         self.assertEqual(self.client.get(reverse("admin:news_review", args=[article.pk])).status_code, 404)
@@ -426,6 +428,101 @@ class WorkflowTests(TestCase):
         with self.assertRaises(ValidationError):
             decide_version(version, self.reviewer, Review.Action.APPROVE)
         form = ArticleForm({"original_text": article.original_text})
-        self.assertFalse(form.is_valid())
-        self.assertIn("Esta notícia está na lixeira", str(form.non_field_errors()))
+        self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(article.versions.count(), 1)
+
+    def test_reimport_ignores_trash_and_preserves_original_history(self):
+        article = self.create(source_url="https://example.org/noticia/?utm_source=email")
+        self.assertTrue(process_next())
+        version = article.versions.get()
+        self.approve(version)
+        self.client.post(reverse("admin:news_trash", args=[article.pk]))
+        article_before = Article.objects.filter(pk=article.pk).values().get()
+        version_before = SummaryVersion.objects.filter(pk=version.pk).values().get()
+        review_before = Review.objects.filter(version=version).values().get()
+
+        response = self.client.post(reverse("admin:news_create"), {
+            "original_text": TEXT, "provider": "heuristic",
+            "source_url": "https://example.org/noticia#top",
+        })
+        replacement = Article.objects.get(trashed_at__isnull=True)
+        self.assertRedirects(response, reverse("admin:news_review", args=[replacement.pk]))
+        self.assertNotEqual(replacement.pk, article.pk)
+        self.assertEqual(replacement.fingerprint, article.fingerprint)
+        self.assertEqual(replacement.source_url, "https://example.org/noticia")
+        self.assertIsNone(replacement.public_version_id)
+        self.assertEqual(replacement.versions.get().number, 1)
+        self.assertEqual(replacement.versions.get().status, SummaryVersion.Status.QUEUED)
+        self.assertEqual(Article.objects.filter(pk=article.pk).values().get(), article_before)
+        self.assertEqual(SummaryVersion.objects.filter(pk=version.pk).values().get(), version_before)
+        self.assertEqual(Review.objects.filter(version=version).values().get(), review_before)
+        self.assertEqual(Client().get(article.get_absolute_url()).status_code, 404)
+
+        form = ArticleForm({"original_text": TEXT.upper(), "provider": "heuristic"})
+        self.assertFalse(form.is_valid())
+        self.assertIn("Este texto já está cadastrado", str(form.non_field_errors()))
+        with self.assertRaises(ValidationError):
+            self.create()
+        self.assertEqual(Article.objects.count(), 2)
+        self.assertEqual(SummaryVersion.objects.count(), 2)
+
+    def test_trashed_url_can_be_reused_but_active_urls_still_block_duplicates(self):
+        article = self.create(source_url="https://example.org/link")
+        self.assertTrue(process_next())
+        self.client.post(reverse("admin:news_trash", args=[article.pk]))
+        response = self.client.post(reverse("admin:news_create"), {
+            "original_text": TEXT + " Atualização.", "provider": "heuristic",
+            "source_url": "https://example.org/link/?utm_source=teste",
+        })
+        self.assertEqual(response.status_code, 302)
+        form = ArticleForm({
+            "original_text": TEXT + " Outra atualização.", "provider": "heuristic",
+            "source_url": "https://example.org/link",
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn("Este link já está cadastrado", str(form.errors["source_url"]))
+        with self.assertRaises(ValidationError):
+            self.create(" Outro texto.", source_url="https://example.org/link")
+        self.assertEqual(Article.objects.filter(trashed_at__isnull=True).count(), 1)
+
+    def test_multiple_trashed_copies_allow_another_registration(self):
+        archived_ids = []
+        for _ in range(2):
+            article, _ = self.ready()
+            self.client.post(reverse("admin:news_trash", args=[article.pk]))
+            archived_ids.append(article.pk)
+        replacement = self.create()
+        self.assertNotIn(replacement.pk, archived_ids)
+        self.assertEqual(Article.objects.filter(trashed_at__isnull=False).count(), 2)
+        self.assertEqual(Article.objects.filter(trashed_at__isnull=True).count(), 1)
+        self.assertEqual(SummaryVersion.objects.count(), 3)
+
+    def test_restore_conflict_keeps_history_and_can_be_resolved_by_trashing_replacement(self):
+        for kind in ("texto", "link"):
+            with self.subTest(conflict=kind):
+                article, version = self.ready(f" {kind}")
+                url = f"https://example.org/{kind}"
+                Article.objects.filter(pk=article.pk).update(source_url=url)
+                self.approve(version)
+                self.client.post(reverse("admin:news_trash", args=[article.pk]))
+                before = Article.objects.filter(pk=article.pk).values().get()
+                version_before = SummaryVersion.objects.filter(pk=version.pk).values().get()
+                suffix = f" {kind}" if kind == "texto" else f" novo {kind}"
+                replacement = self.create(suffix, source_url="" if kind == "texto" else url)
+
+                with self.assertRaisesMessage(ValidationError, "Já existe uma notícia ativa com este texto ou link"):
+                    restore_article(article, self.reviewer)
+                response = self.client.post(reverse("admin:news_restore", args=[article.pk]), follow=True)
+                self.assertContains(response, "Já existe uma notícia ativa com este texto ou link")
+                self.assertEqual(Article.objects.filter(pk=article.pk).values().get(), before)
+                self.assertEqual(SummaryVersion.objects.filter(pk=version.pk).values().get(), version_before)
+                self.assertEqual(Review.objects.filter(version=version).count(), 1)
+                self.assertEqual(Client().get(article.get_absolute_url()).status_code, 404)
+
+                self.assertTrue(process_next())
+                self.client.post(reverse("admin:news_trash", args=[replacement.pk]))
+                response = self.client.post(reverse("admin:news_restore", args=[article.pk]), follow=True)
+                self.assertContains(response, "Notícia restaurada.")
+                article.refresh_from_db()
+                self.assertIsNone(article.trashed_at)
+                self.assertContains(Client().get(article.get_absolute_url()), version.summary)

@@ -144,6 +144,13 @@ def move_article_to_trash(article, user):
 
 def restore_article(article, user):
     require_reviewer(user)
-    changed = Article.objects.filter(pk=article.pk, trashed_at__isnull=False).update(trashed_at=None)
+    try:
+        with transaction.atomic():
+            changed = Article.objects.filter(pk=article.pk, trashed_at__isnull=False).update(trashed_at=None)
+    except IntegrityError as exc:
+        raise ValidationError(
+            "Já existe uma notícia ativa com este texto ou link. "
+            "Mova-a para a lixeira antes de restaurar esta notícia."
+        ) from exc
     if not changed:
         raise ValidationError("Esta notícia já está no painel.")

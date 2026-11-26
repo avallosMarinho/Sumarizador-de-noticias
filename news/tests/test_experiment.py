@@ -166,3 +166,25 @@ class ExperimentTests(TestCase):
         self.assertContains(response, "A segunda notícia já está cadastrada.")
         self.assertFalse(Article.objects.exists())
         self.assertFalse(SummaryVersion.objects.exists())
+
+    def test_upload_batch_reimports_trashed_news_as_new_articles(self):
+        article = self.create({"original_text": TEXT})
+        article.versions.update(status=SummaryVersion.Status.FAILED)
+        self.client.post(reverse("admin:news_trash", args=[article.pk]))
+        original_version = article.versions.get()
+        response = self.client.post(reverse("admin:news_create"), {
+            "text_file": [
+                SimpleUploadedFile("N05.txt", TEXT.encode("utf-8-sig")),
+                SimpleUploadedFile("nova.txt", b"Outra noticia\nTexto diferente."),
+            ],
+            "model": "llama3.2:3b",
+        }, follow=True)
+        self.assertContains(response, "2 notícias salvas e adicionadas à fila")
+        self.assertEqual(Article.objects.filter(trashed_at__isnull=True).count(), 2)
+        article.refresh_from_db()
+        self.assertIsNotNone(article.trashed_at)
+        self.assertEqual(article.versions.get().pk, original_version.pk)
+        versions = SummaryVersion.objects.filter(article__trashed_at__isnull=True)
+        self.assertEqual(versions.count(), 2)
+        self.assertTrue(all(version.status == "queued" and version.number == 1 for version in versions))
+        self.assertTrue(all(version.requested_model == "llama3.2:3b" for version in versions))

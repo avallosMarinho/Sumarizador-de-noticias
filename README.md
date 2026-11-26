@@ -87,6 +87,12 @@ histórico de resumos e métricas. Uma notícia publicada fica fora da página
 pública enquanto estiver na lixeira. Aguarde o término de gerações na fila ou
 em andamento antes de mover a notícia.
 
+A lixeira libera o texto e o link para um novo cadastro, inclusive no envio de
+vários TXT. O novo cadastro começa na versão 1. Para restaurar uma notícia cujo
+texto ou link já pertence a outra notícia ativa, mova essa outra notícia para a
+lixeira primeiro. Após atualizar o código, execute `python manage.py migrate`
+para aplicar a migração `0003_active_article_uniqueness`.
+
 ## Experimentar o fluxo sem instalar um modelo
 
 1. No painel, clique em **Nova notícia**.
