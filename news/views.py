@@ -9,6 +9,7 @@ from .models import Article, SummaryVersion
 
 def published_articles():
     return Article.objects.filter(
+        trashed_at__isnull=True,
         public_version__isnull=False, published_at__isnull=False,
         public_version__status=SummaryVersion.Status.APPROVED,
         public_version__article_id=F("pk"),

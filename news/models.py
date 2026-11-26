@@ -12,7 +12,7 @@ class Article(models.Model):
     source_url = models.URLField("link original", max_length=1000, blank=True)
     source_date = models.DateField("data da notícia original", blank=True, null=True)
     original_text = models.TextField("texto original")
-    fingerprint = models.CharField(max_length=64, unique=True, editable=False)
+    fingerprint = models.CharField(max_length=64, editable=False)
     version_counter = models.PositiveIntegerField(default=0, editable=False)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     created_at = models.DateTimeField("cadastrada em", auto_now_add=True)
@@ -21,16 +21,24 @@ class Article(models.Model):
         related_name="+", verbose_name="versão publicada",
     )
     published_at = models.DateTimeField("publicada em", null=True, blank=True)
+    trashed_at = models.DateTimeField("movida para a lixeira em", null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "notícia"
         verbose_name_plural = "notícias"
         ordering = ["-created_at"]
         permissions = [("review_summary", "Pode gerar, revisar e publicar resumos")]
-        constraints = [models.UniqueConstraint(
-            fields=["source_url"], condition=~models.Q(source_url=""),
-            name="unique_nonempty_source_url",
-        )]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["fingerprint"], condition=models.Q(trashed_at__isnull=True),
+                name="unique_active_fingerprint",
+            ),
+            models.UniqueConstraint(
+                fields=["source_url"],
+                condition=models.Q(trashed_at__isnull=True) & ~models.Q(source_url=""),
+                name="unique_nonempty_source_url",
+            ),
+        ]
 
     def __str__(self):
         return self.original_title

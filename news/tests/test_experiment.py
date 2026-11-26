@@ -12,7 +12,7 @@ from django.urls import reverse
 from news.forms import ArticleForm
 from news.models import Article, SummaryVersion
 from news.processing import process_next
-from news.services import CRITERION_KEYS, create_article, decide_version, edit_version
+from news.services import create_article, decide_version, edit_version
 
 TEXT = "Título da notícia\nTexto da notícia com informações para sumarização."
 SUMMARY = {"titulo": "Título gerado", "resumo": "Resumo de teste.", "pontos_principais": [], "pessoas": [], "locais": [], "datas": []}
@@ -83,7 +83,7 @@ class ExperimentTests(TestCase):
         edited = edit_version(version, {"title": "Editado", "summary": "Resumo editado", "points": [], "people": [], "places": [], "dates": []}, self.user)
         self.assertEqual(edited.generated_output, version.generated_output)
         self.assertContains(self.client.get(reverse("admin:news_review", args=[article.pk])), "Tempo da geração de origem")
-        decide_version(version, self.user, "approve", criteria={key: True for key in CRITERION_KEYS})
+        decide_version(version, self.user, "approve")
         self.assertContains(self.client.get(article.get_absolute_url()), "Resumo de teste.")
 
     def test_failure_logs_and_duration_are_saved(self):
@@ -166,3 +166,25 @@ class ExperimentTests(TestCase):
         self.assertContains(response, "A segunda notícia já está cadastrada.")
         self.assertFalse(Article.objects.exists())
         self.assertFalse(SummaryVersion.objects.exists())
+
+    def test_upload_batch_reimports_trashed_news_as_new_articles(self):
+        article = self.create({"original_text": TEXT})
+        article.versions.update(status=SummaryVersion.Status.FAILED)
+        self.client.post(reverse("admin:news_trash", args=[article.pk]))
+        original_version = article.versions.get()
+        response = self.client.post(reverse("admin:news_create"), {
+            "text_file": [
+                SimpleUploadedFile("N05.txt", TEXT.encode("utf-8-sig")),
+                SimpleUploadedFile("nova.txt", b"Outra noticia\nTexto diferente."),
+            ],
+            "model": "llama3.2:3b",
+        }, follow=True)
+        self.assertContains(response, "2 notícias salvas e adicionadas à fila")
+        self.assertEqual(Article.objects.filter(trashed_at__isnull=True).count(), 2)
+        article.refresh_from_db()
+        self.assertIsNotNone(article.trashed_at)
+        self.assertEqual(article.versions.get().pk, original_version.pk)
+        versions = SummaryVersion.objects.filter(article__trashed_at__isnull=True)
+        self.assertEqual(versions.count(), 2)
+        self.assertTrue(all(version.status == "queued" and version.number == 1 for version in versions))
+        self.assertTrue(all(version.requested_model == "llama3.2:3b" for version in versions))

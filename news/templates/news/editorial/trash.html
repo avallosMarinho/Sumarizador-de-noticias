@@ -1,0 +1,15 @@
+{% extends 'news/editorial/base.html' %}
+{% block trail %} › Lixeira{% endblock %}
+{% block editorial_content %}
+<div class="editorial-panel">
+  <h2>Mover esta notícia para a lixeira?</h2>
+  <p><strong>{{ article.original_title }}</strong></p>
+  <p>Ela sairá do painel de revisão. Se estiver publicada, ficará fora da página pública até ser restaurada.</p>
+  <p>Você pode recuperá-la pela aba <strong>Lixeira</strong>, junto com seus resumos, métricas e histórico.</p>
+  <form method="post" class="form-actions">
+    {% csrf_token %}
+    <button type="submit" class="reject-button">Mover para a lixeira</button>
+    <a class="secondary-button" href="{{ return_url }}">Cancelar</a>
+  </form>
+</div>
+{% endblock %}
